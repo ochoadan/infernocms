@@ -1,0 +1,1 @@
+{"version":3,"file":"dev.d.ts","sourceRoot":"","sources":["../../src/commands/dev.ts"],"names":[],"mappings":"AAkBA,MAAM,WAAW,UAAU;IACzB,IAAI,CAAC,EAAE,MAAM,CAAC;IACd,SAAS,CAAC,EAAE,MAAM,CAAC;IACnB,MAAM,CAAC,EAAE,MAAM,CAAC;IAChB,KAAK,CAAC,EAAE,OAAO,CAAC;CACjB;AAED,wBAAsB,GAAG,CAAC,OAAO,GAAE,UAAe,GAAG,OAAO,CAAC,IAAI,CAAC,CAoFjE"}

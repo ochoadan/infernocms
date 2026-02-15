@@ -1,0 +1,12 @@
+{
+  "name": "infernocms-basic-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "infernocms dev"
+  },
+  "dependencies": {
+    "infernocms": "workspace:*",
+    "@infernocms/cli": "workspace:*"
+  }
+}
