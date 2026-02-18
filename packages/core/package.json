@@ -1,0 +1,42 @@
+{
+  "name": "infernocms",
+  "version": "0.0.1",
+  "description": "Headless CMS with flexible field types, REST API, and admin UI",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ochoadan/infernocms.git",
+    "directory": "packages/core"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.986.0",
+    "@electric-sql/pglite": "^0.2.15",
+    "@fastify/cors": "^10.0.2",
+    "@fastify/multipart": "^9.4.0",
+    "@fastify/static": "^9.0.0",
+    "fastify": "^5.2.0",
+    "jiti": "^2.4.2",
+    "pino-pretty": "^13.0.0",
+    "postgres": "^3.4.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}
