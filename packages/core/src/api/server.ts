@@ -67,7 +67,7 @@ export async function createServer(
     registerAuth(app, options.auth);
   }
 
-  await registerRoutes(app, config, options.hooks, options.access);
+  await registerRoutes(app, config, options.hooks, options.access, options.auth);
 
   return app;
 }
