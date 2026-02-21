@@ -3,13 +3,14 @@
 import { type ReactNode } from "react";
 import { Sidebar } from "./sidebar";
 import { useSchema } from "./providers";
+import { LoginScreen } from "./login-screen";
 
 interface AdminLayoutProps {
   children: ReactNode;
 }
 
 export function AdminLayout({ children }: AdminLayoutProps) {
-  const { schema, loading, error, mounted } = useSchema();
+  const { schema, loading, error, requiresAuth, mounted, refresh } = useSchema();
 
   // Render nothing until mounted to avoid hydration mismatch
   if (!mounted) {
@@ -22,6 +23,10 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         <div className="text-muted-foreground">Loading...</div>
       </div>
     );
+  }
+
+  if (requiresAuth) {
+    return <LoginScreen onLogin={refresh} />;
   }
 
   if (error) {

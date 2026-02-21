@@ -57,7 +57,11 @@ export async function fetchSchema(): Promise<Schema> {
   const res = await fetch(`${API_BASE}/_schema`, {
     headers: getAdminHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch schema');
+  if (!res.ok) {
+    const err = new Error('Failed to fetch schema');
+    (err as any).status = res.status;
+    throw err;
+  }
   return res.json();
 }
 
