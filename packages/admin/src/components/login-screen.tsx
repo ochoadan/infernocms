@@ -1,10 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Database02Icon } from "@hugeicons/react";
 
 interface LoginScreenProps {
   onLogin: () => Promise<void>;
@@ -40,37 +47,53 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle>InfernoCMS</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Enter the admin key to continue
-          </p>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="admin-key">Admin Key</Label>
-              <Input
-                id="admin-key"
-                type="password"
-                value={key}
-                onChange={(e) => setKey(e.target.value)}
-                placeholder="Enter admin key"
-                required
-                autoFocus
-              />
+    <div className="flex min-h-screen items-center justify-center bg-muted/30">
+      <div className="w-full max-w-md px-4">
+        <div className="flex flex-col items-center gap-8">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+              <Database02Icon className="h-5 w-5 text-primary-foreground" />
             </div>
-            {error && (
-              <p className="text-sm text-destructive">{error}</p>
-            )}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign in"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+            <span className="text-lg font-semibold">InfernoCMS</span>
+          </div>
+
+          <Card className="w-full">
+            <CardHeader className="text-center">
+              <CardTitle className="text-xl">Welcome to InfernoCMS</CardTitle>
+              <CardDescription>
+                Enter your admin key to continue
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {error && (
+                <div className="mb-4 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="admin-key">Admin Key</Label>
+                  <Input
+                    id="admin-key"
+                    type="password"
+                    value={key}
+                    onChange={(e) => setKey(e.target.value)}
+                    placeholder="Enter admin key"
+                    required
+                    autoFocus
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? "Signing in..." : "Sign in"}
+                </Button>
+              </form>
+              <p className="mt-4 text-center text-xs text-muted-foreground">
+                Secure admin access
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

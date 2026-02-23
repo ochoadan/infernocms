@@ -2,9 +2,20 @@ import { extname } from 'node:path';
 import { createListHandler, createGetHandler, createCreateHandler, createUpdateHandler, createDeleteHandler, } from './handlers.js';
 import { formatResponse, formatError } from './response.js';
 import { getStorage } from '../storage/index.js';
-export async function registerRoutes(app, config, hooks, access) {
+function requireAuth(request, reply) {
+    const user = request.user;
+    if (!user) {
+        reply.status(403);
+        reply.send(formatError('Authentication required', 'FORBIDDEN'));
+        return false;
+    }
+    return true;
+}
+export async function registerRoutes(app, config, hooks, access, auth) {
     // Schema endpoint for admin UI
-    app.get('/api/_schema', async () => {
+    app.get('/api/_schema', async (request, reply) => {
+        if (auth && !requireAuth(request, reply))
+            return;
         const collections = {};
         for (const [name, col] of Object.entries(config.collections)) {
             collections[name] = {
@@ -16,6 +27,8 @@ export async function registerRoutes(app, config, hooks, access) {
     });
     // File upload endpoint
     app.post('/api/_upload', async (request, reply) => {
+        if (auth && !requireAuth(request, reply))
+            return;
         const file = await request.file();
         if (!file) {
             reply.status(400);
@@ -29,9 +42,21 @@ export async function registerRoutes(app, config, hooks, access) {
     // Collection CRUD routes
     for (const collection of Object.values(config.collections)) {
         const basePath = `/api/${collection.name}`;
+        const collectionAccess = access?.[collection.name];
+        // When auth is configured, default write ops to require authentication.
+        // Explicit user-defined rules always win via ?? fallback.
+        // Read access stays open (CMS content is typically public).
+        const effectiveAccess = auth
+            ? {
+                read: collectionAccess?.read,
+                create: collectionAccess?.create ?? (({ user }) => !!user),
+                update: collectionAccess?.update ?? (({ user }) => !!user),
+                delete: collectionAccess?.delete ?? (({ user }) => !!user),
+            }
+            : collectionAccess;
         const handlerOpts = {
             hooks: hooks?.[collection.name],
-            access: access?.[collection.name],
+            access: effectiveAccess,
         };
         app.get(basePath, createListHandler(collection, config, handlerOpts));
         app.get(`${basePath}/:id`, createGetHandler(collection, config, handlerOpts));
