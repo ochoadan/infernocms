@@ -14,9 +14,9 @@ interface StatsCardProps {
 export function StatsCard({ icon, label, value, trend }: StatsCardProps) {
   return (
     <Card>
-      <CardContent className="p-6">
+      <CardContent>
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
             {icon}
           </div>
           <div className="flex-1">
