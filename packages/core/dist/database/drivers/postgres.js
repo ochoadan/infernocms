@@ -7,6 +7,7 @@ export async function createPostgresClient(connectionString) {
     });
     // Test connection
     await sql `SELECT 1`;
+    let closed = false;
     function makeClient(unsafeFn, isTransaction = false) {
         return {
             async query(sqlText, params) {
@@ -20,6 +21,9 @@ export async function createPostgresClient(connectionString) {
                 await unsafeFn(sqlText);
             },
             async close() {
+                if (isTransaction || closed)
+                    return;
+                closed = true;
                 await sql.end();
             },
             async transaction(fn) {

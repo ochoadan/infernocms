@@ -16,6 +16,10 @@ export interface ServerOptions {
     cors?: {
         origin?: string | string[] | boolean;
     };
+    rateLimit?: {
+        max?: number;
+        timeWindow?: string;
+    };
 }
 export declare function createServer(config: NormalizedConfig, options?: ServerOptions): Promise<FastifyInstance>;
 export declare function startServer(app: FastifyInstance, options?: ServerOptions): Promise<void>;

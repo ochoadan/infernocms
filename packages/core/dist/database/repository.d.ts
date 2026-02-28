@@ -44,6 +44,11 @@ export declare class Repository {
     private buildWhereClause;
     private buildOrderByClause;
 }
+/**
+ * Create a repository instance. No module-level caching — use AppContext
+ * for caching across handler lifetimes.
+ */
 export declare function getRepository(collection: NormalizedCollectionConfig, config: NormalizedConfig, db?: DbClient): Repository;
+/** @deprecated No-op. Repository caching is now handled by AppContext. */
 export declare function clearRepositories(): void;
 //# sourceMappingURL=repository.d.ts.map

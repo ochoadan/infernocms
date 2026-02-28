@@ -14,6 +14,10 @@ export interface ErrorResponse {
     error: {
         message: string;
         code?: string;
+        details?: {
+            field: string;
+            message: string;
+        }[];
     };
 }
 export declare function formatResponse<T>(data: T): ApiResponse<T>;
@@ -23,5 +27,8 @@ export declare function formatPaginatedResponse<T>(data: T[], meta: {
     perPage: number;
     totalPages: number;
 }): PaginatedApiResponse<T>;
-export declare function formatError(message: string, code?: string): ErrorResponse;
+export declare function formatError(message: string, code?: string, details?: {
+    field: string;
+    message: string;
+}[]): ErrorResponse;
 //# sourceMappingURL=response.d.ts.map
