@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useMemo } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSchema } from "@/components/providers";
 import { DynamicForm } from "@/components/dynamic-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { createItem } from "@/lib/api";
 import { ArrowLeft01Icon } from "@hugeicons/react";
+import { useToast } from "@/components/ui/use-toast";
 import Link from "next/link";
 
 export default function NewItemPage() {
@@ -16,18 +17,33 @@ export default function NewItemPage() {
   const { schema } = useSchema();
   const collectionName = params.collection as string;
 
+  const searchParams = useSearchParams();
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
   const collection = schema?.collections[collectionName];
+
+  const initialData = useMemo(() => {
+    const dataParam = searchParams.get("data");
+    if (dataParam) {
+      try {
+        return JSON.parse(dataParam) as Record<string, unknown>;
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  }, [searchParams]);
 
   const handleSubmit = async (data: Record<string, unknown>) => {
     try {
       setIsLoading(true);
       await createItem(collectionName, data);
+      toast({ title: "Item created", variant: "success" });
       router.push(`/collections/${collectionName}`);
     } catch (err) {
       console.error("Failed to create:", err);
-      alert("Failed to create item");
+      toast({ title: "Failed to create item", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -65,6 +81,7 @@ export default function NewItemPage() {
         <CardContent>
           <DynamicForm
             fields={collection.fields}
+            initialData={initialData}
             onSubmit={handleSubmit}
             isLoading={isLoading}
             blockSchemas={schema?.blocks}

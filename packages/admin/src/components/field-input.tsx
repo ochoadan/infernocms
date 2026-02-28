@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -89,6 +89,34 @@ export function getDisplayName(item: Record<string, unknown>): string {
   return `#${item.id}`;
 }
 
+function useRelationSearch(collection?: string) {
+  const [items, setItems] = useState<Record<string, unknown>[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const load = useCallback((query?: string) => {
+    if (!collection) return;
+    setLoading(true);
+    fetchCollection(collection, { perPage: 50, search: query || undefined })
+      .then((res) => setItems(res.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [collection]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const search = useCallback((query: string) => {
+    setSearchQuery(query);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => load(query), 300);
+  }, [load]);
+
+  return { items, loading, searchQuery, search };
+}
+
 function RelationSingleField({
   name,
   field,
@@ -102,18 +130,12 @@ function RelationSingleField({
   onChange: (value: unknown) => void;
   error?: string;
 }) {
-  const [items, setItems] = useState<Record<string, unknown>[]>([]);
-  const [loadingItems, setLoadingItems] = useState(false);
+  const { items, loading, searchQuery, search } = useRelationSearch(field.collection);
+  const [open, setOpen] = useState(false);
   const label = name.charAt(0).toUpperCase() + name.slice(1);
 
-  useEffect(() => {
-    if (!field.collection) return;
-    setLoadingItems(true);
-    fetchCollection(field.collection, { perPage: 50 })
-      .then((res) => setItems(res.data))
-      .catch(() => {})
-      .finally(() => setLoadingItems(false));
-  }, [field.collection]);
+  const selectedItem = items.find((i) => i.id === value);
+  const selectedLabel = selectedItem ? getDisplayName(selectedItem) : value != null ? `#${value}` : null;
 
   return (
     <div className="space-y-2">
@@ -121,23 +143,60 @@ function RelationSingleField({
         {label}
         {field.required && <span className="text-destructive"> *</span>}
       </Label>
-      <Select
-        value={value != null ? String(value) : ""}
-        onValueChange={(v) => onChange(v ? Number(v) : null)}
-      >
-        <SelectTrigger className="h-11">
-          <SelectValue
-            placeholder={loadingItems ? "Loading..." : `Select ${name}`}
-          />
-        </SelectTrigger>
-        <SelectContent>
-          {items.map((item) => (
-            <SelectItem key={item.id as number} value={String(item.id)}>
-              {getDisplayName(item)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="relative">
+        <button
+          type="button"
+          className="flex h-11 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+          onClick={() => setOpen(!open)}
+        >
+          <span className={selectedLabel ? "" : "text-muted-foreground"}>
+            {selectedLabel ?? (loading ? "Loading..." : `Select ${name}`)}
+          </span>
+          <svg className="h-4 w-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {open && (
+          <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
+            <div className="p-2">
+              <Input
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => search(e.target.value)}
+                className="h-8"
+                autoFocus
+              />
+            </div>
+            <div className="max-h-60 overflow-y-auto p-1">
+              {value != null && (
+                <button
+                  type="button"
+                  className="w-full rounded px-3 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent"
+                  onClick={() => { onChange(null); setOpen(false); }}
+                >
+                  Clear selection
+                </button>
+              )}
+              {items.map((item) => (
+                <button
+                  key={item.id as number}
+                  type="button"
+                  className={`w-full rounded px-3 py-1.5 text-left text-sm hover:bg-accent ${item.id === value ? "bg-accent font-medium" : ""}`}
+                  onClick={() => { onChange(item.id); setOpen(false); }}
+                >
+                  {getDisplayName(item)}
+                </button>
+              ))}
+              {items.length === 0 && !loading && (
+                <p className="px-3 py-2 text-sm text-muted-foreground">No results</p>
+              )}
+              {loading && (
+                <p className="px-3 py-2 text-sm text-muted-foreground">Loading...</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );
@@ -156,8 +215,8 @@ function RelationManyField({
   onChange: (value: unknown) => void;
   error?: string;
 }) {
-  const [items, setItems] = useState<Record<string, unknown>[]>([]);
-  const [loadingItems, setLoadingItems] = useState(false);
+  const { items, loading, searchQuery, search } = useRelationSearch(field.collection);
+  const [open, setOpen] = useState(false);
   const label = name.charAt(0).toUpperCase() + name.slice(1);
 
   const selectedIds: number[] = Array.isArray(value)
@@ -168,15 +227,6 @@ function RelationManyField({
       )
     : [];
 
-  useEffect(() => {
-    if (!field.collection) return;
-    setLoadingItems(true);
-    fetchCollection(field.collection, { perPage: 50 })
-      .then((res) => setItems(res.data))
-      .catch(() => {})
-      .finally(() => setLoadingItems(false));
-  }, [field.collection]);
-
   const toggleItem = (id: number) => {
     if (selectedIds.includes(id)) {
       onChange(selectedIds.filter((i) => i !== id));
@@ -184,6 +234,8 @@ function RelationManyField({
       onChange([...selectedIds, id]);
     }
   };
+
+  const available = items.filter((item) => !selectedIds.includes(item.id as number));
 
   return (
     <div className="space-y-2">
@@ -213,27 +265,51 @@ function RelationManyField({
           })}
         </div>
       )}
-      <Select
-        value=""
-        onValueChange={(v) => {
-          if (v) toggleItem(Number(v));
-        }}
-      >
-        <SelectTrigger className="h-11">
-          <SelectValue
-            placeholder={loadingItems ? "Loading..." : `Add ${name}`}
-          />
-        </SelectTrigger>
-        <SelectContent>
-          {items
-            .filter((item) => !selectedIds.includes(item.id as number))
-            .map((item) => (
-              <SelectItem key={item.id as number} value={String(item.id)}>
-                {getDisplayName(item)}
-              </SelectItem>
-            ))}
-        </SelectContent>
-      </Select>
+      <div className="relative">
+        <button
+          type="button"
+          className="flex h-11 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+          onClick={() => setOpen(!open)}
+        >
+          <span className="text-muted-foreground">
+            {loading ? "Loading..." : `Add ${name}`}
+          </span>
+          <svg className="h-4 w-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {open && (
+          <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
+            <div className="p-2">
+              <Input
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => search(e.target.value)}
+                className="h-8"
+                autoFocus
+              />
+            </div>
+            <div className="max-h-60 overflow-y-auto p-1">
+              {available.map((item) => (
+                <button
+                  key={item.id as number}
+                  type="button"
+                  className="w-full rounded px-3 py-1.5 text-left text-sm hover:bg-accent"
+                  onClick={() => toggleItem(item.id as number)}
+                >
+                  {getDisplayName(item)}
+                </button>
+              ))}
+              {available.length === 0 && !loading && (
+                <p className="px-3 py-2 text-sm text-muted-foreground">No results</p>
+              )}
+              {loading && (
+                <p className="px-3 py-2 text-sm text-muted-foreground">Loading...</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );
@@ -743,8 +819,14 @@ export function FieldInput({
             value={(value as string) ?? ""}
             onChange={(e) => onChange(e.target.value)}
             placeholder={`Enter ${name}`}
+            maxLength={field.maxLength}
             className="h-11"
           />
+          {field.maxLength && (
+            <p className="text-xs text-muted-foreground">
+              {((value as string) ?? "").length}/{field.maxLength}
+            </p>
+          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
       );
@@ -761,9 +843,15 @@ export function FieldInput({
             value={(value as string) ?? ""}
             onChange={(e) => onChange(e.target.value)}
             placeholder={`Enter ${name}`}
+            maxLength={field.maxLength}
             rows={5}
             className="min-h-[120px]"
           />
+          {field.maxLength && (
+            <p className="text-xs text-muted-foreground">
+              {((value as string) ?? "").length}/{field.maxLength}
+            </p>
+          )}
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
       );

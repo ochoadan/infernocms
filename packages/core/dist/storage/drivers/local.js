@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { writeFile, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 export function createLocalStorage(options = {}) {
     const uploadDir = options.uploadDir ?? join(process.cwd(), 'uploads');
     if (!existsSync(uploadDir)) {
@@ -16,8 +16,12 @@ export function createLocalStorage(options = {}) {
         async delete(url) {
             const name = url.split('/').pop();
             if (name) {
+                const resolved = resolve(join(uploadDir, name));
+                const base = resolve(uploadDir);
+                if (!resolved.startsWith(base + sep) && resolved !== base)
+                    return;
                 try {
-                    await unlink(join(uploadDir, name));
+                    await unlink(resolved);
                 }
                 catch {
                     // File may not exist

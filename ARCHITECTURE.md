@@ -55,8 +55,8 @@ export default defineConfig({
         excerpt: field.text({ maxLength: 200 }),
         body: field.richtext(),
         cover: field.image(),
-        author: field.relation({ to: 'authors' }),
-        tags: field.relation({ to: 'tags', many: true }),
+        author: field.relation({ collection: 'authors' }),
+        tags: field.relation({ collection: 'tags', many: true }),
         status: field.select({
           options: ['draft', 'published'],
           default: 'draft'
@@ -90,21 +90,14 @@ export default defineConfig({
     }
   },
 
-  // Optional: override defaults
-  database: {
-    provider: 'pglite',        // or 'postgres'
-    url: './.infernocms/data', // or process.env.DATABASE_URL for postgres
-  },
+  // Database is configured via environment variables or CLI flags:
+  //   DATABASE_URL=postgres://user:pass@host:5432/db npx infernocms start
+  // In development, PGlite is used automatically (embedded in .infernocms/data/).
 
   storage: {
-    provider: 'local',         // or 's3', 'r2'
-    path: './uploads',
+    provider: 'local',         // or 's3'
+    uploadDir: './uploads',
   },
-
-  admin: {
-    enabled: true,
-    path: '/admin',
-  }
 });
 ```
 
@@ -147,13 +140,16 @@ Fields marked with * are implemented. Unmarked fields are planned.
 | `datetime` | `TIMESTAMP` | * | Date and time |
 | `date` | `DATE` | * | Date only |
 | `json` | `JSONB` | * | Arbitrary JSON |
-| `richtext` | `JSONB` | Planned | Block-based rich content |
+| `richtext` | `JSONB` | * | Block-based rich content |
 | `multiselect` | `JSONB` | Planned | Multiple choices |
-| `image` | `TEXT` (path/url) | Planned | Image reference |
-| `file` | `TEXT` (path/url) | Planned | File reference |
-| `relation` | `INTEGER` (FK) | Planned | Reference to another collection |
-| `slug` | `TEXT UNIQUE` | Planned | URL-safe identifier |
-| `blocks` | `JSONB` | Planned | Flexible content blocks |
+| `image` | `TEXT` (path/url) | * | Image reference |
+| `file` | `TEXT` (path/url) | * | File reference |
+| `relation` | `INTEGER` (FK) | * | Reference to another collection |
+| `slug` | `TEXT UNIQUE` | * | URL-safe identifier |
+| `blocks` | `JSONB` | * | Flexible content blocks |
+| `link` | `JSONB` | * | URL with label and target |
+| `group` | `JSONB` | * | Nested field group |
+| `array` | `JSONB` | * | Repeatable field group |
 
 ## Database schema
 
@@ -179,10 +175,10 @@ CREATE TABLE posts (
 
 -- Junction table for many-to-many (posts <-> tags)
 CREATE TABLE posts_tags (
-  post_id INTEGER REFERENCES posts(id) ON DELETE CASCADE,
-  tag_id INTEGER REFERENCES tags(id) ON DELETE CASCADE,
-  sort_order INTEGER DEFAULT 0,
-  PRIMARY KEY (post_id, tag_id)
+  posts_id INTEGER REFERENCES posts(id) ON DELETE CASCADE,
+  tags_id INTEGER REFERENCES tags(id) ON DELETE CASCADE,
+  "sortOrder" INTEGER DEFAULT 0,
+  PRIMARY KEY (posts_id, tags_id)
 );
 
 -- Index for common queries
@@ -195,25 +191,16 @@ CREATE INDEX idx_posts_author ON posts(author);
 
 When you change `content.config.ts`:
 
-| Change | Behavior |
-|--------|----------|
-| Add field | Column added with NULL default |
-| Remove field | Column kept (data preserved), hidden from API |
-| Rename field | Treated as remove + add (use migration for data) |
-| Change field type | Error (use explicit migration) |
-| Add collection | Table created |
-| Remove collection | Table kept, hidden from API |
+| Change | Dev mode (`force: true`) | Production (`force: false`) |
+|--------|--------------------------|-------------------------------|
+| Add field | Column added (safe) | Column added (safe) |
+| Remove field | Column dropped (destructive) | Logged, skipped |
+| Rename field | Treated as remove + add | Treated as remove + add |
+| Change field type | Column altered (destructive) | Logged, skipped |
+| Add collection | Table created (safe) | Table created (safe) |
+| Remove collection | Table dropped (destructive) | Logged, skipped |
 
-**Principle:** Never auto-delete data. Schema changes are additive by default.
-
-### Explicit migrations
-
-For destructive changes (renaming fields, changing types, dropping data):
-
-```bash
-npx infernocms migrate:generate rename-field
-npx infernocms migrate:run
-```
+In production, destructive operations are logged but not executed unless explicitly forced. In dev mode, all operations execute to keep the schema in sync with the config.
 
 ## API design
 
@@ -252,11 +239,11 @@ GET /api/posts?status=published
 GET /api/posts?author=5
 GET /api/posts?status=published&author=5  # AND
 
-# Relations (depth) — planned
+# Relations (depth)
 GET /api/posts?depth=1              # include author object
 GET /api/posts?depth=2              # include author and their relations
 
-# Field selection — planned
+# Field selection
 GET /api/posts?fields=id,title,slug
 ```
 
@@ -288,7 +275,7 @@ GET /api/posts?fields=id,title,slug
   }
 }
 
-// With depth=1 (planned):
+// With depth=1:
 {
   "data": {
     "id": 1,
@@ -305,11 +292,10 @@ GET /api/posts?fields=id,title,slug
 {
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Title is required",
-    "details": {
-      "field": "title",
-      "rule": "required"
-    }
+    "message": "Field \"title\" is required",
+    "details": [
+      { "field": "title", "message": "Field \"title\" is required" }
+    ]
   }
 }
 ```
@@ -344,18 +330,22 @@ The admin reads the schema from `GET /api/_schema` and generates:
 |------------|-----------------|
 | `text` | Text input |
 | `textarea` | Textarea |
-| `richtext` | Block editor (Plate) — planned |
+| `richtext` | Block editor (Plate) |
 | `number` | Number input |
 | `boolean` | Toggle switch |
 | `datetime` | Date-time picker |
 | `date` | Date picker |
 | `select` | Dropdown |
 | `multiselect` | Multi-select dropdown — planned |
-| `image` | Image picker + upload — planned |
-| `file` | File picker + upload — planned |
-| `relation` | Searchable select / modal picker — planned |
-| `blocks` | Block editor with picker — planned |
+| `image` | Image picker + upload |
+| `file` | File picker + upload |
+| `relation` | Searchable select / modal picker |
+| `slug` | Text input with auto-generate toggle |
+| `blocks` | Block editor with picker |
 | `json` | JSON editor |
+| `link` | URL + label + target fields |
+| `group` | Nested field group |
+| `array` | Repeatable item list |
 
 ### Admin routes
 
@@ -371,10 +361,9 @@ The admin reads the schema from `GET /api/_schema` and generates:
 
 Built with:
 - **Next.js 15 App Router** — Server components for initial load
-- **React Hook Form** — Form state management
 - **shadcn/ui** — Component library
-- **TanStack Table** — Data tables
-- **Plate** — Rich text / block editor (planned)
+- **Custom data table** — Sortable, paginated, searchable
+- **Plate** — Rich text / block editor
 
 ## File structure
 
@@ -398,17 +387,17 @@ your-project/
         └── cli/                # CLI commands
 ```
 
-## Blocks system (planned)
+## Blocks system
 
 For flexible page content:
 
 ```typescript
 // content.config.ts
-import { defineConfig, field, block } from 'infernocms';
+import { defineConfig, field } from 'infernocms';
 
 export default defineConfig({
   blocks: {
-    hero: block({
+    hero: {
       fields: {
         heading: field.text({ required: true }),
         subheading: field.text(),
@@ -416,22 +405,21 @@ export default defineConfig({
         cta: field.text(),
         ctaLink: field.text(),
       }
-    }),
+    },
 
-    richtext: block({
+    richtext: {
       fields: {
         content: field.richtext(),
       }
-    }),
+    },
 
-    gallery: block({
+    gallery: {
       fields: {
-        images: field.image({ many: true }),
         columns: field.select({ options: ['2', '3', '4'], default: '3' }),
       }
-    }),
+    },
 
-    cta: block({
+    cta: {
       fields: {
         heading: field.text(),
         description: field.text(),
@@ -439,7 +427,7 @@ export default defineConfig({
         buttonLink: field.text(),
         variant: field.select({ options: ['default', 'dark'], default: 'default' }),
       }
-    }),
+    },
   },
 
   collections: {
@@ -477,7 +465,7 @@ Blocks stored as JSON array:
 }
 ```
 
-## Authentication (planned, optional)
+## Authentication (optional)
 
 Disabled by default. Enable with:
 
@@ -521,7 +509,7 @@ export default defineConfig({
 });
 ```
 
-## Hooks (planned, optional)
+## Hooks (optional)
 
 ```typescript
 export default defineConfig({

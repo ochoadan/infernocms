@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Database02Icon } from "@hugeicons/react";
+import { login } from "@/lib/api";
 
 interface LoginScreenProps {
   onLogin: () => Promise<void>;
@@ -27,23 +28,18 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     setError(null);
     setLoading(true);
 
-    localStorage.setItem("infernocms-admin-key", key);
-
     try {
-      await onLogin();
+      const success = await login(key);
+      if (success) {
+        await onLogin();
+      } else {
+        setError("Invalid admin key");
+      }
     } catch {
-      // If onLogin doesn't throw, the provider will re-render.
-      // If it does throw, we catch it here.
-    }
-
-    // After refresh, if requiresAuth is still true the component
-    // will re-render with the same state. We detect that by checking
-    // if we're still mounted after a tick.
-    setTimeout(() => {
-      // If we're still visible, the key was wrong
-      setError("Invalid admin key");
+      setError("Failed to connect");
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   }
 
   return (

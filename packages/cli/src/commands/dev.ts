@@ -1,5 +1,5 @@
 import { resolve, dirname } from 'node:path';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, statSync, watch } from 'node:fs';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createRequire } from 'node:module';
 import {
@@ -13,6 +13,7 @@ import {
   initStorage,
   extractHooks,
   extractAccess,
+  AppContext,
 } from 'infernocms';
 import { generateTypes } from './generate-types.js';
 
@@ -21,6 +22,7 @@ export interface DevOptions {
   adminPort?: number;
   config?: string;
   admin?: boolean;
+  dryRun?: boolean;
 }
 
 export async function dev(options: DevOptions = {}): Promise<void> {
@@ -32,25 +34,22 @@ export async function dev(options: DevOptions = {}): Promise<void> {
   console.log('InfernoCMS Dev Server\n');
   console.log(`Loading config from: ${configPath}`);
 
-  const rawConfig = await loadConfig(configPath);
-  const config = parseConfig(rawConfig);
-
-  const hooks = extractHooks(rawConfig);
-  const access = extractAccess(rawConfig);
+  let rawConfig = await loadConfig(configPath);
+  let config = parseConfig(rawConfig);
 
   const collectionNames = Object.keys(config.collections);
   console.log(`Found ${collectionNames.length} collection(s): ${collectionNames.join(', ')}\n`);
 
   console.log('Initializing database...');
   const dataDir = resolve(process.cwd(), '.infernocms/data');
-  await createConnection({ dataDir });
+  const db = await createConnection({ dataDir });
 
   console.log('Syncing tables...');
-  await syncTables(config);
+  await syncTables(config, { force: true, dryRun: options.dryRun, db });
 
-  if (config.storage) {
-    await initStorage(config.storage);
-  }
+  const storage = config.storage ? await initStorage(config.storage) : undefined;
+
+  let ctx = new AppContext({ db, config, storage });
 
   // Auto-generate types
   try {
@@ -61,11 +60,12 @@ export async function dev(options: DevOptions = {}): Promise<void> {
   }
 
   console.log('Starting API server...\n');
-  const app = await createServer(config, {
+  let app = await createServer(config, {
     logger: false,
-    hooks,
-    access,
+    hooks: extractHooks(rawConfig),
+    access: extractAccess(rawConfig),
     auth: rawConfig.auth,
+    ctx,
   });
   await startServer(app, { port });
 
@@ -94,6 +94,71 @@ export async function dev(options: DevOptions = {}): Promise<void> {
     console.log('\nAdmin UI:   Disabled (--no-admin)\n');
   }
 
+  // Config hot-reload watcher
+  let reloading = false;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  watch(configPath, () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(async () => {
+      if (reloading) return;
+      reloading = true;
+
+      try {
+        console.log('\n[reload] Config changed, reloading...');
+
+        // 1. Load fresh config
+        const newRawConfig = await loadConfig(configPath);
+        const newConfig = parseConfig(newRawConfig);
+
+        // 2. Sync tables with new schema (force in dev)
+        await syncTables(newConfig, { force: true, db });
+
+        // 3. Clear cached repositories (stale schema)
+        ctx.clearRepositories();
+
+        // 4. Shut down old Fastify instance
+        await app.close();
+
+        // 5. Create new context + server with new config
+        ctx = new AppContext({ db, config: newConfig, storage });
+
+        app = await createServer(newConfig, {
+          logger: false,
+          hooks: extractHooks(newRawConfig),
+          access: extractAccess(newRawConfig),
+          auth: newRawConfig.auth,
+          ctx,
+        });
+        await startServer(app, { port });
+
+        // 6. Regenerate types
+        try {
+          await generateTypes({ config: options.config });
+        } catch {
+          // Non-fatal
+        }
+
+        // Update references
+        rawConfig = newRawConfig;
+        config = newConfig;
+
+        const newEndpoints = getEndpointList(newConfig);
+        console.log('[reload] Reload complete. Endpoints:');
+        for (const endpoint of newEndpoints) {
+          console.log(`  ${endpoint}`);
+        }
+        console.log('');
+      } catch (err) {
+        console.error('[reload] Error reloading config:', err instanceof Error ? err.message : err);
+        console.error('[reload] Keeping previous server running.\n');
+      } finally {
+        reloading = false;
+      }
+    }, 500);
+  });
+
+  console.log('Watching config for changes...');
   console.log('Press Ctrl+C to stop\n');
 
   // Graceful shutdown

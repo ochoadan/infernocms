@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -9,11 +10,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
   PencilEdit01Icon,
   Delete01Icon,
+  ArrowUp01Icon,
+  ArrowDown01Icon,
+  Search01Icon,
 } from "@hugeicons/react";
 import type { SchemaField } from "@/lib/api";
 
@@ -26,7 +31,12 @@ interface DataTableProps {
     perPage: number;
     totalPages: number;
   };
+  sort?: string;
+  search?: string;
   onPageChange: (page: number) => void;
+  onSortChange?: (sort: string) => void;
+  onSearchChange?: (search: string) => void;
+  onPerPageChange?: (perPage: number) => void;
   onEdit: (id: number) => void;
   onDelete: (id: number) => void;
 }
@@ -122,27 +132,110 @@ function formatValue(value: unknown, field: SchemaField): string {
   }
 }
 
+// Fields that aren't useful as table columns
+const SKIP_COLUMN_TYPES = new Set(["richtext", "blocks", "json", "group", "array"]);
+const MAX_DISPLAY_FIELDS = 6;
+
+const PER_PAGE_OPTIONS = [10, 25, 50];
+
 export function DataTable({
   data,
   fields,
   meta,
+  sort,
+  search,
   onPageChange,
+  onSortChange,
+  onSearchChange,
+  onPerPageChange,
   onEdit,
   onDelete,
 }: DataTableProps) {
+  const [searchInput, setSearchInput] = useState(search ?? "");
+
   const fieldNames = Object.keys(fields);
-  const displayFields = fieldNames.slice(0, 4);
+  // Show simple fields first, then complex ones, up to MAX_DISPLAY_FIELDS
+  const sortedFieldNames = [
+    ...fieldNames.filter((f) => !SKIP_COLUMN_TYPES.has(fields[f].type)),
+    ...fieldNames.filter((f) => SKIP_COLUMN_TYPES.has(fields[f].type)),
+  ];
+  const displayFields = sortedFieldNames.slice(0, MAX_DISPLAY_FIELDS);
   const colCount = displayFields.length + 2;
+
+  // Parse current sort
+  const sortField = sort?.startsWith("-") ? sort.slice(1) : sort ?? "";
+  const sortDir = sort?.startsWith("-") ? "desc" : "asc";
+
+  const handleSort = (field: string) => {
+    if (!onSortChange) return;
+    if (sortField === field) {
+      // Toggle direction
+      onSortChange(sortDir === "asc" ? `-${field}` : field);
+    } else {
+      onSortChange(`-${field}`);
+    }
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSearchChange?.(searchInput);
+  };
 
   return (
     <div>
+      {onSearchChange && (
+        <div className="border-b px-4 py-3">
+          <form onSubmit={handleSearchSubmit} className="flex gap-2">
+            <div className="relative flex-1 max-w-sm">
+              <Search01Icon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Button type="submit" variant="outline" size="default">
+              Search
+            </Button>
+            {search && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="default"
+                onClick={() => {
+                  setSearchInput("");
+                  onSearchChange("");
+                }}
+              >
+                Clear
+              </Button>
+            )}
+          </form>
+        </div>
+      )}
+
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-16">ID</TableHead>
+            <TableHead className="w-16">
+              <SortableHeader
+                label="ID"
+                field="id"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={onSortChange ? handleSort : undefined}
+              />
+            </TableHead>
             {displayFields.map((field) => (
               <TableHead key={field}>
-                {field.charAt(0).toUpperCase() + field.slice(1)}
+                <SortableHeader
+                  label={field.charAt(0).toUpperCase() + field.slice(1)}
+                  field={field}
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={onSortChange ? handleSort : undefined}
+                />
               </TableHead>
             ))}
             <TableHead className="w-28">Actions</TableHead>
@@ -195,12 +288,29 @@ export function DataTable({
         </TableBody>
       </Table>
 
-      {meta.totalPages > 1 && (
-        <div className="flex items-center justify-between border-t px-6 py-4">
+      <div className="flex items-center justify-between border-t px-6 py-4">
+        <div className="flex items-center gap-4">
           <div className="text-sm text-muted-foreground">
-            Showing {(meta.page - 1) * meta.perPage + 1} to{" "}
-            {Math.min(meta.page * meta.perPage, meta.total)} of {meta.total} items
+            {meta.total > 0
+              ? `Showing ${(meta.page - 1) * meta.perPage + 1} to ${Math.min(meta.page * meta.perPage, meta.total)} of ${meta.total} items`
+              : `${meta.total} items`}
           </div>
+          {onPerPageChange && (
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-muted-foreground">Per page:</label>
+              <select
+                value={meta.perPage}
+                onChange={(e) => onPerPageChange(Number(e.target.value))}
+                className="h-8 rounded-md border bg-background px-2 text-sm"
+              >
+                {PER_PAGE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+        {meta.totalPages > 1 && (
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -221,8 +331,47 @@ export function DataTable({
               <ArrowRight01Icon className="ml-2 h-4 w-4" />
             </Button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
+  );
+}
+
+function SortableHeader({
+  label,
+  field,
+  sortField,
+  sortDir,
+  onSort,
+}: {
+  label: string;
+  field: string;
+  sortField: string;
+  sortDir: string;
+  onSort?: (field: string) => void;
+}) {
+  if (!onSort) {
+    return <span>{label}</span>;
+  }
+
+  const isActive = sortField === field;
+
+  return (
+    <button
+      type="button"
+      className="flex items-center gap-1 hover:text-foreground transition-colors -ml-2 px-2 py-1 rounded"
+      onClick={() => onSort(field)}
+    >
+      {label}
+      {isActive ? (
+        sortDir === "asc" ? (
+          <ArrowUp01Icon className="h-3.5 w-3.5" />
+        ) : (
+          <ArrowDown01Icon className="h-3.5 w-3.5" />
+        )
+      ) : (
+        <span className="w-3.5" />
+      )}
+    </button>
   );
 }

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { writeFile, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import type { StorageDriver } from '../driver.js';
 
 export interface LocalStorageOptions {
@@ -24,8 +24,11 @@ export function createLocalStorage(options: LocalStorageOptions = {}): StorageDr
     async delete(url: string): Promise<void> {
       const name = url.split('/').pop();
       if (name) {
+        const resolved = resolve(join(uploadDir, name));
+        const base = resolve(uploadDir);
+        if (!resolved.startsWith(base + sep) && resolved !== base) return;
         try {
-          await unlink(join(uploadDir, name));
+          await unlink(resolved);
         } catch {
           // File may not exist
         }

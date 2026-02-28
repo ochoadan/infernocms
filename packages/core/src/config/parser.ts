@@ -48,6 +48,24 @@ function parseShorthand(shorthand: string): NormalizedFieldConfig {
     return { type: 'slug', required, from };
   }
 
+  // select:draft,published (options list)
+  if (clean.startsWith('select:')) {
+    const optionsStr = clean.slice(7);
+    if (!optionsStr) {
+      throw new Error(`Shorthand "select:" must include at least one option (e.g., "select:draft,published")`);
+    }
+    // Options are comma-separated; colons and commas inside option values are not supported
+    const options = optionsStr.split(',');
+    for (const opt of options) {
+      if (opt.includes(':')) {
+        throw new Error(
+          `Select option "${opt}" in shorthand "${shorthand}" contains a colon. Shorthand select options cannot contain ":" or ",". Use the verbose field.select() syntax instead.`
+        );
+      }
+    }
+    return { type: 'select', required, options };
+  }
+
   const type = clean as FieldType;
 
   if (!VALID_FIELD_TYPES.includes(type)) {
@@ -82,6 +100,10 @@ function normalizeField(
 
   if (definition.type === 'select' && 'options' in definition) {
     normalized.options = definition.options;
+  }
+
+  if ((definition.type === 'text' || definition.type === 'textarea') && 'maxLength' in definition) {
+    normalized.maxLength = (definition as { maxLength?: number }).maxLength;
   }
 
   if (definition.type === 'number' && 'integer' in definition) {
@@ -127,6 +149,8 @@ function normalizeBlock(
   return { name, fields };
 }
 
+const RESERVED_FIELD_NAMES = new Set(['id', 'createdAt', 'updatedAt']);
+
 function normalizeCollection(
   name: string,
   collection: CollectionConfig
@@ -134,6 +158,11 @@ function normalizeCollection(
   const fields: Record<string, NormalizedFieldConfig> = {};
 
   for (const [fieldName, definition] of Object.entries(collection.fields)) {
+    if (RESERVED_FIELD_NAMES.has(fieldName)) {
+      throw new Error(
+        `Field "${fieldName}" in collection "${name}" is reserved. System fields (id, createdAt, updatedAt) are added automatically.`
+      );
+    }
     fields[fieldName] = normalizeField(fieldName, definition);
   }
 
@@ -161,6 +190,28 @@ export function parseConfig(config: InfernoCMSConfig): NormalizedConfig {
         throw new Error(`Block "${name}" must have a "fields" object`);
       }
       blocks[name] = normalizeBlock(name, block);
+    }
+  }
+
+  // Validate cross-references after all collections are parsed
+  for (const [colName, col] of Object.entries(collections)) {
+    for (const [fieldName, fieldConfig] of Object.entries(col.fields)) {
+      // Validate relation targets
+      if (fieldConfig.type === 'relation' && fieldConfig.collection) {
+        if (!collections[fieldConfig.collection]) {
+          throw new Error(
+            `Field "${fieldName}" in collection "${colName}" references collection "${fieldConfig.collection}" which does not exist`
+          );
+        }
+      }
+      // Validate slug.from references
+      if (fieldConfig.type === 'slug' && fieldConfig.from) {
+        if (!col.fields[fieldConfig.from]) {
+          throw new Error(
+            `Field "${fieldName}" in collection "${colName}" has "from" referencing field "${fieldConfig.from}" which does not exist in this collection`
+          );
+        }
+      }
     }
   }
 

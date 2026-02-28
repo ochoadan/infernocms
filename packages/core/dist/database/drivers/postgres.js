@@ -7,20 +7,32 @@ export async function createPostgresClient(connectionString) {
     });
     // Test connection
     await sql `SELECT 1`;
-    return {
-        async query(sqlText, params) {
-            const result = await sql.unsafe(sqlText, params);
-            return {
-                rows: result,
-                affectedRows: result.count,
-            };
-        },
-        async exec(sqlText) {
-            await sql.unsafe(sqlText);
-        },
-        async close() {
-            await sql.end();
-        },
-    };
+    function makeClient(unsafeFn, isTransaction = false) {
+        return {
+            async query(sqlText, params) {
+                const result = await unsafeFn(sqlText, params);
+                return {
+                    rows: result,
+                    affectedRows: result.count,
+                };
+            },
+            async exec(sqlText) {
+                await unsafeFn(sqlText);
+            },
+            async close() {
+                await sql.end();
+            },
+            async transaction(fn) {
+                if (isTransaction) {
+                    return fn(this);
+                }
+                return sql.begin(async (txSql) => {
+                    const txClient = makeClient((text, params) => txSql.unsafe(text, params), true);
+                    return fn(txClient);
+                });
+            },
+        };
+    }
+    return makeClient((sqlText, params) => sql.unsafe(sqlText, params));
 }
 //# sourceMappingURL=postgres.js.map
