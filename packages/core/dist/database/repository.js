@@ -11,6 +11,7 @@ function slugify(text) {
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '');
 }
+const _warnedCollections = new Set();
 export class Repository {
     tableName;
     collection;
@@ -29,6 +30,10 @@ export class Repository {
         this.tableName = collection.name;
         this.collection = collection;
         this.config = config;
+        if (!db && !_warnedCollections.has(collection.name)) {
+            _warnedCollections.add(collection.name);
+            console.warn(`[infernocms] Repository "${collection.name}" created without explicit db client — falling back to singleton. Pass db via AppContext for proper DI.`);
+        }
         this.db = db ?? getDb();
         this.allowedFields = new Set([
             ...Object.keys(collection.fields),
@@ -75,12 +80,12 @@ export class Repository {
     }
     async create(data) {
         const manyRelations = this.extractManyRelations(data);
-        const withSlugs = await this.generateSlugs(data);
-        const sanitized = this.sanitizeData(withSlugs);
-        const fields = Object.keys(sanitized);
-        const values = Object.values(sanitized);
-        const placeholders = values.map((_, i) => `$${i + 1}`);
         return this.db.transaction(async (tx) => {
+            const withSlugs = await this.generateSlugs(data, undefined, tx);
+            const sanitized = this.sanitizeData(withSlugs);
+            const fields = Object.keys(sanitized);
+            const values = Object.values(sanitized);
+            const placeholders = values.map((_, i) => `$${i + 1}`);
             const query = `INSERT INTO "${this.tableName}" (${fields.map(f => `"${f}"`).join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
             const result = await tx.query(query, values);
             const row = result.rows[0];
@@ -89,19 +94,21 @@ export class Repository {
         });
     }
     async update(id, data, partial = false) {
-        if (!partial) {
-            const existing = await this.findById(id);
-            if (!existing)
-                return null;
-        }
         const manyRelations = this.extractManyRelations(data);
-        const withSlugs = await this.generateSlugs(data, id);
-        const sanitized = this.sanitizeData(withSlugs);
-        const fields = Object.keys(sanitized);
-        if (fields.length === 0 && Object.keys(manyRelations).length === 0) {
-            return this.findById(id);
-        }
         return this.db.transaction(async (tx) => {
+            if (!partial) {
+                const check = await tx.query(`SELECT id FROM "${this.tableName}" WHERE id = $1`, [id]);
+                if (check.rows.length === 0)
+                    return null;
+            }
+            const withSlugs = await this.generateSlugs(data, id, tx);
+            const sanitized = this.sanitizeData(withSlugs);
+            const fields = Object.keys(sanitized);
+            if (fields.length === 0 && Object.keys(manyRelations).length === 0) {
+                // Use tx to stay within the transaction snapshot
+                const result = await tx.query(`SELECT * FROM "${this.tableName}" WHERE id = $1`, [id]);
+                return result.rows[0] ?? null;
+            }
             let row = null;
             if (fields.length > 0) {
                 const setClause = fields
@@ -113,7 +120,9 @@ export class Repository {
                 row = result.rows[0] ?? null;
             }
             else {
-                row = await this.findById(id);
+                // Use tx to stay within the transaction snapshot
+                const result = await tx.query(`SELECT * FROM "${this.tableName}" WHERE id = $1`, [id]);
+                row = result.rows[0] ?? null;
             }
             if (row) {
                 await this.saveManyRelations(id, manyRelations, tx);
@@ -122,17 +131,10 @@ export class Repository {
         });
     }
     async delete(id) {
-        return this.db.transaction(async (tx) => {
-            // Delete junction table rows for many-to-many relations
-            for (const [fieldName, fieldConfig] of Object.entries(this.collection.fields)) {
-                if (fieldConfig.type === 'relation' && fieldConfig.many && fieldConfig.collection) {
-                    const junctionTable = `${this.tableName}_${fieldName}`;
-                    await tx.query(`DELETE FROM "${junctionTable}" WHERE "${this.tableName}_id" = $1`, [id]);
-                }
-            }
-            const result = await tx.query(`DELETE FROM "${this.tableName}" WHERE id = $1`, [id]);
-            return (result.affectedRows ?? 0) > 0;
-        });
+        // Junction tables have ON DELETE CASCADE, so deleting the parent row
+        // automatically cleans up all junction entries.
+        const result = await this.db.query(`DELETE FROM "${this.tableName}" WHERE id = $1`, [id]);
+        return (result.affectedRows ?? 0) > 0;
     }
     buildSelectClause(fields) {
         if (!fields || fields.length === 0)
@@ -270,24 +272,25 @@ export class Repository {
         }
         return manyRelations;
     }
-    async generateSlugs(data, existingId) {
+    async generateSlugs(data, existingId, client) {
         const result = { ...data };
+        const db = client ?? this.db;
         for (const [fieldName, fieldConfig] of Object.entries(this.collection.fields)) {
             if (fieldConfig.type !== 'slug')
                 continue;
             if (result[fieldName] && typeof result[fieldName] === 'string') {
                 const base = slugify(result[fieldName]);
-                result[fieldName] = await this.ensureUniqueSlug(fieldName, base, existingId);
+                result[fieldName] = await this.ensureUniqueSlug(fieldName, base, db, existingId);
                 continue;
             }
             if (fieldConfig.from && result[fieldConfig.from]) {
                 const base = slugify(String(result[fieldConfig.from]));
-                result[fieldName] = await this.ensureUniqueSlug(fieldName, base, existingId);
+                result[fieldName] = await this.ensureUniqueSlug(fieldName, base, db, existingId);
             }
         }
         return result;
     }
-    async ensureUniqueSlug(fieldName, baseSlug, excludeId) {
+    async ensureUniqueSlug(fieldName, baseSlug, client, excludeId) {
         let counter = 0;
         while (counter <= 100) {
             const candidate = counter === 0 ? baseSlug : `${baseSlug}-${counter}`;
@@ -297,7 +300,7 @@ export class Repository {
                 query += ` AND id != $2`;
                 params.push(excludeId);
             }
-            const result = await this.db.query(query, params);
+            const result = await client.query(query, params);
             const count = parseInt(result.rows[0]?.count ?? '0', 10);
             if (count === 0) {
                 return candidate;
@@ -307,7 +310,7 @@ export class Repository {
         return `${baseSlug}-${Date.now()}`;
     }
     async saveManyRelations(rowId, manyRelations, tx) {
-        const client = tx ?? this.db;
+        const client = tx;
         for (const [fieldName, ids] of Object.entries(manyRelations)) {
             const fieldConfig = this.collection.fields[fieldName];
             if (!fieldConfig || fieldConfig.type !== 'relation' || !fieldConfig.collection)
@@ -443,17 +446,16 @@ export class Repository {
         return ` ORDER BY "${field}" ${direction}`;
     }
 }
-const repositories = new Map();
+/**
+ * Create a repository instance. No module-level caching — use AppContext
+ * for caching across handler lifetimes.
+ */
 export function getRepository(collection, config, db) {
-    const key = collection.name;
-    let repo = repositories.get(key);
-    if (!repo) {
-        repo = new Repository(collection, config, db);
-        repositories.set(key, repo);
-    }
-    return repo;
+    return new Repository(collection, config, db);
 }
+/** @deprecated No-op. Repository caching is now handled by AppContext. */
 export function clearRepositories() {
-    repositories.clear();
+    // Intentionally empty — kept for backward compatibility.
+    // Use AppContext.clearRepositories() instead.
 }
 //# sourceMappingURL=repository.js.map

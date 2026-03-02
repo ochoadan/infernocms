@@ -3,11 +3,15 @@ import { mkdir } from 'node:fs/promises';
 export async function createPGliteClient(dataDir) {
     await mkdir(dataDir, { recursive: true });
     const pglite = new PGlite(dataDir);
+    let closed = false;
     function makeClient(queryFn, execFn, isTransaction = false) {
         return {
             query: queryFn,
             exec: execFn,
             async close() {
+                if (isTransaction || closed)
+                    return;
+                closed = true;
                 await pglite.close();
             },
             async transaction(fn) {

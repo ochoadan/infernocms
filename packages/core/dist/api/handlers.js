@@ -78,7 +78,7 @@ export function createCreateHandler(collection, config, options) {
         const result = await service.create(request.body ?? {}, options?.hooks);
         if (result.error) {
             reply.status(400);
-            return formatError(result.error, 'VALIDATION_ERROR');
+            return formatError(result.error, 'VALIDATION_ERROR', result.validationErrors);
         }
         reply.status(201);
         return formatResponse(result.item);
@@ -109,7 +109,7 @@ export function createUpdateHandler(collection, config, partial = false, options
         const result = await service.update(id, request.body ?? {}, partial, options?.hooks);
         if (result.error) {
             reply.status(400);
-            return formatError(result.error, 'VALIDATION_ERROR');
+            return formatError(result.error, 'VALIDATION_ERROR', result.validationErrors);
         }
         if (!result.item) {
             reply.status(404);

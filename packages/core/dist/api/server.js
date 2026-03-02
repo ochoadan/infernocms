@@ -44,8 +44,8 @@ export async function createServer(config, options = {}) {
     await app.register(cookie);
     // Rate limiting
     await app.register(rateLimit, {
-        max: 100,
-        timeWindow: '1 minute',
+        max: options.rateLimit?.max ?? 300,
+        timeWindow: options.rateLimit?.timeWindow ?? '1 minute',
     });
     // Multipart for file uploads (10MB limit)
     await app.register(multipart, {
@@ -53,32 +53,41 @@ export async function createServer(config, options = {}) {
             fileSize: 10 * 1024 * 1024,
         },
     });
-    // Serve uploaded files with security headers
-    const uploadsDir = join(process.cwd(), 'uploads');
-    if (!existsSync(uploadsDir)) {
-        mkdirSync(uploadsDir, { recursive: true });
+    // Serve uploaded files with security headers (only for local storage)
+    if (!config.storage?.provider || config.storage.provider === 'local') {
+        const uploadsDir = join(process.cwd(), 'uploads');
+        if (!existsSync(uploadsDir)) {
+            mkdirSync(uploadsDir, { recursive: true });
+        }
+        const safeInlineExts = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif']);
+        await app.register(fastifyStatic, {
+            root: uploadsDir,
+            prefix: '/uploads/',
+            setHeaders: (res, filePath) => {
+                res.setHeader('X-Content-Type-Options', 'nosniff');
+                res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; media-src 'self'");
+                const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+                if (!safeInlineExts.has(ext)) {
+                    res.setHeader('Content-Disposition', 'attachment');
+                }
+            },
+        });
     }
-    const safeInlineExts = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif']);
-    await app.register(fastifyStatic, {
-        root: uploadsDir,
-        prefix: '/uploads/',
-        setHeaders: (res, filePath) => {
-            res.setHeader('X-Content-Type-Options', 'nosniff');
-            res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; media-src 'self'");
-            const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
-            if (!safeInlineExts.has(ext)) {
-                res.setHeader('Content-Disposition', 'attachment');
-            }
-        },
-    });
     // Register auth middleware if configured
-    if (options.auth) {
-        registerAuth(app, options.auth);
+    let effectiveAuth = options.auth;
+    if (effectiveAuth) {
+        if (!effectiveAuth.secret && !effectiveAuth.adminSecret) {
+            app.log.warn('Auth config provided but neither secret nor adminSecret is set — treating as no auth. Writes will be publicly accessible.');
+            effectiveAuth = undefined;
+        }
+        else {
+            registerAuth(app, effectiveAuth);
+        }
     }
     else {
         app.log.warn('No auth configured — all API endpoints are publicly accessible. Set auth.adminSecret or auth.secret to protect your data.');
     }
-    await registerRoutes(app, config, options.hooks, options.access, options.auth, options.storage, options.ctx);
+    await registerRoutes(app, config, options.hooks, options.access, effectiveAuth, options.storage, options.ctx);
     return app;
 }
 export async function startServer(app, options = {}) {

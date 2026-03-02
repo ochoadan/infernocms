@@ -1,28 +1,7 @@
 import { createHash } from 'node:crypto';
 import { getDb } from './connection.js';
 import { diffSchema } from './schema-diff.js';
-function fieldTypeToPostgres(field) {
-    const typeMap = {
-        text: 'TEXT',
-        textarea: 'TEXT',
-        datetime: 'TIMESTAMP',
-        date: 'DATE',
-        select: 'TEXT',
-        number: field.integer ? 'INTEGER' : 'REAL',
-        boolean: 'BOOLEAN',
-        json: 'JSONB',
-        richtext: 'JSONB',
-        relation: 'INTEGER',
-        slug: 'TEXT',
-        image: 'TEXT',
-        file: 'TEXT',
-        blocks: 'JSONB',
-        link: 'JSONB',
-        group: 'JSONB',
-        array: 'JSONB',
-    };
-    return typeMap[field.type];
-}
+import { pgDdlType } from './field-types.js';
 function getDefaultValue(field) {
     if (field.default === undefined) {
         return null;
@@ -54,7 +33,7 @@ function getDefaultValue(field) {
     }
 }
 function buildColumnDefinition(name, field) {
-    const pgType = fieldTypeToPostgres(field);
+    const pgType = pgDdlType(field);
     const parts = [`"${name}"`, pgType];
     if (field.required) {
         parts.push('NOT NULL');
@@ -106,8 +85,20 @@ function buildJunctionIndexStatements(tableName, fieldName, relatedCollection) {
         `CREATE INDEX IF NOT EXISTS "idx_${junctionName}_${relatedCollection}_id" ON "${junctionName}" ("${relatedCollection}_id");`,
     ];
 }
+function sortKeysDeep(obj) {
+    if (Array.isArray(obj))
+        return obj.map(sortKeysDeep);
+    if (obj !== null && typeof obj === 'object') {
+        const sorted = {};
+        for (const key of Object.keys(obj).sort()) {
+            sorted[key] = sortKeysDeep(obj[key]);
+        }
+        return sorted;
+    }
+    return obj;
+}
 function hashConfig(config) {
-    const serialized = JSON.stringify(config.collections);
+    const serialized = JSON.stringify(sortKeysDeep(config.collections));
     return createHash('sha256').update(serialized).digest('hex');
 }
 async function ensureTrackingTable(db) {
@@ -119,8 +110,12 @@ async function ensureTrackingTable(db) {
   );`);
 }
 async function isAlreadyApplied(db, hash) {
-    const result = await db.query(`SELECT COUNT(*) as count FROM "_infernocms_migrations" WHERE hash = $1`, [hash]);
-    return parseInt(result.rows[0]?.count ?? '0', 10) > 0;
+    // Compare against the most recent migration hash, not any hash in history.
+    // This ensures that reverting to a previous config (whose hash exists in
+    // history but is not the latest) still triggers a re-diff.
+    const result = await db.query(`SELECT hash FROM "_infernocms_migrations" ORDER BY id DESC LIMIT 1`);
+    const latestHash = result.rows[0]?.hash;
+    return latestHash === hash;
 }
 async function recordMigration(db, hash, ops) {
     const opsJson = JSON.stringify(ops.map(op => {
@@ -128,6 +123,30 @@ async function recordMigration(db, hash, ops) {
         return rest;
     }));
     await db.query(`INSERT INTO "_infernocms_migrations" (hash, operations) VALUES ($1, $2::jsonb)`, [hash, opsJson]);
+}
+async function getKnownCmsTables(db) {
+    const tables = new Set();
+    try {
+        const result = await db.query(`SELECT operations FROM "_infernocms_migrations" ORDER BY id`);
+        for (const row of result.rows) {
+            const ops = typeof row.operations === 'string'
+                ? JSON.parse(row.operations)
+                : row.operations;
+            for (const op of ops) {
+                if (op.type === 'CreateTable' || op.type === 'CreateJunctionTable') {
+                    tables.add(op.table);
+                }
+                // If a table was dropped in a past migration, remove it from known set
+                if (op.type === 'DropTable') {
+                    tables.delete(op.table);
+                }
+            }
+        }
+    }
+    catch {
+        // Tracking table may not exist yet
+    }
+    return tables;
 }
 export async function getTableInfo(tableName, db) {
     const client = db ?? getDb();
@@ -193,8 +212,10 @@ export async function syncTables(config, options = {}) {
         if (info)
             actual.set(name, info);
     }
+    // Gather known CMS-managed table names from previous migrations
+    const knownCmsTables = await getKnownCmsTables(db);
     // Compute diff
-    const allOps = diffSchema(actual, config);
+    const allOps = diffSchema(actual, config, knownCmsTables);
     if (allOps.length === 0) {
         if (!applied)
             await recordMigration(db, hash, []);
@@ -234,36 +255,44 @@ export async function syncTables(config, options = {}) {
     // Separate safe vs destructive
     const safeOps = allOps.filter(op => !op.destructive);
     const destructiveOps = allOps.filter(op => op.destructive);
-    // Execute safe ops (create tables first, then add columns, then indexes/junctions)
-    await executeSafeOps(safeOps, config, db);
-    // Execute destructive ops only with force
-    if (destructiveOps.length > 0) {
-        if (force) {
-            await executeDestructiveOps(destructiveOps, db);
-        }
-        else {
-            console.log('\n[migration] Skipping destructive operations (use force mode to apply):');
-            for (const op of destructiveOps) {
-                switch (op.type) {
-                    case 'DropColumn':
-                        console.log(`  - Would drop column "${op.column}" from "${op.table}"`);
-                        break;
-                    case 'DropTable':
-                        console.log(`  - Would drop table "${op.table}"`);
-                        break;
-                    case 'AlterColumn':
-                        console.log(`  - Would alter column "${op.column}" in "${op.table}": ${op.description}`);
-                        break;
-                }
+    // Execute all ops inside a transaction so partial failure rolls back cleanly.
+    // Hash is recorded inside the same transaction — only persisted on commit.
+    await db.transaction(async (tx) => {
+        // Phase 1: Safe ops (create tables, add columns, indexes, junctions)
+        await executeSafeOps(safeOps, config, tx);
+        // Phase 2: Destructive ops only with force
+        if (destructiveOps.length > 0) {
+            if (force) {
+                await executeDestructiveOps(destructiveOps, tx);
             }
-            console.log('');
+            else {
+                console.log('\n[migration] Skipping destructive operations (use force mode to apply):');
+                for (const op of destructiveOps) {
+                    switch (op.type) {
+                        case 'DropColumn':
+                            console.log(`  - Would drop column "${op.column}" from "${op.table}"`);
+                            break;
+                        case 'DropTable':
+                            console.log(`  - Would drop table "${op.table}"`);
+                            break;
+                        case 'AlterColumn':
+                            console.log(`  - Would alter column "${op.column}" in "${op.table}": ${op.description}`);
+                            break;
+                    }
+                }
+                console.log('');
+            }
         }
-    }
-    const executedOps = force ? allOps : safeOps;
-    if (executedOps.length > 0 || !applied) {
-        await recordMigration(db, hash, executedOps);
-    }
-    return executedOps;
+        const executedOps = force ? allOps : safeOps;
+        // Only record the hash when ALL ops were applied. If destructive ops
+        // were skipped (force=false), omitting the hash ensures a later call
+        // with force=true will re-diff and apply the destructive ops.
+        const allOpsApplied = destructiveOps.length === 0 || force;
+        if (allOpsApplied && (executedOps.length > 0 || !applied)) {
+            await recordMigration(tx, hash, executedOps);
+        }
+    });
+    return force ? allOps : safeOps;
 }
 async function executeSafeOps(ops, config, db) {
     // Phase 1: Create tables

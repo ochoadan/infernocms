@@ -13,7 +13,7 @@ export { formatResponse, formatPaginatedResponse, formatError, type ApiResponse,
 export { type ParsedFilter } from './api/filters.js';
 export { extractHooks, type HooksMap } from './api/hooks.js';
 export { extractAccess, checkAccess, type AccessMap } from './api/access.js';
-export { createContentService, validateData, type ContentService, type ListOptions, type ContentServiceOptions, } from './services/content-service.js';
+export { createContentService, validateData, type ContentService, type ListOptions, type ContentServiceOptions, type ValidationError, } from './services/content-service.js';
 export { initStorage, getStorage, type StorageDriver, } from './storage/index.js';
 export { AppContext } from './context.js';
 //# sourceMappingURL=index.d.ts.map
