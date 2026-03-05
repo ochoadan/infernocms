@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto';
 import { getDb } from './connection.js';
+import { diffSchema } from './schema-diff.js';
 function fieldTypeToPostgres(field) {
     const typeMap = {
         text: 'TEXT',
@@ -88,56 +90,48 @@ function buildJunctionTableSQL(tableName, fieldName, relatedCollection) {
   PRIMARY KEY ("${tableName}_id", "${relatedCollection}_id")
 );`;
 }
-export async function syncTables(config) {
-    const db = getDb();
-    // First pass: create all tables (so FK references work)
-    for (const [name, collection] of Object.entries(config.collections)) {
-        try {
-            const sql = buildCreateTableSQL(name, collection.fields);
-            await db.exec(sql);
-        }
-        catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            throw new Error(`Failed to create table "${name}": ${message}`);
+function buildIndexStatements(tableName, fields) {
+    const statements = [];
+    statements.push(`CREATE INDEX IF NOT EXISTS "idx_${tableName}_createdAt" ON "${tableName}" ("createdAt");`);
+    for (const [fieldName, fieldConfig] of Object.entries(fields)) {
+        if (fieldConfig.type === 'relation' && !fieldConfig.many) {
+            statements.push(`CREATE INDEX IF NOT EXISTS "idx_${tableName}_${fieldName}" ON "${tableName}" ("${fieldName}");`);
         }
     }
-    // Second pass: add missing columns and create junction tables
-    for (const [name, collection] of Object.entries(config.collections)) {
-        try {
-            const tableInfo = await getTableInfo(name);
-            if (tableInfo.exists) {
-                const existingColumns = new Set(tableInfo.columns);
-                for (const [fieldName, fieldConfig] of Object.entries(collection.fields)) {
-                    // Skip many-to-many (they use junction tables, not columns)
-                    if (fieldConfig.type === 'relation' && fieldConfig.many) {
-                        continue;
-                    }
-                    if (!existingColumns.has(fieldName)) {
-                        const pgType = fieldTypeToPostgres(fieldConfig);
-                        const defaultVal = getDefaultValue(fieldConfig);
-                        const defaultClause = defaultVal !== null ? ` DEFAULT ${defaultVal}` : '';
-                        const uniqueClause = fieldConfig.type === 'slug' ? ' UNIQUE' : '';
-                        await db.exec(`ALTER TABLE "${name}" ADD COLUMN "${fieldName}" ${pgType}${uniqueClause}${defaultClause};`);
-                    }
-                }
-            }
-            // Create junction tables for many-to-many relations
-            for (const [fieldName, fieldConfig] of Object.entries(collection.fields)) {
-                if (fieldConfig.type === 'relation' && fieldConfig.many && fieldConfig.collection) {
-                    const sql = buildJunctionTableSQL(name, fieldName, fieldConfig.collection);
-                    await db.exec(sql);
-                }
-            }
-        }
-        catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            throw new Error(`Failed to sync table "${name}": ${message}`);
-        }
-    }
+    return statements;
 }
-export async function getTableInfo(tableName) {
-    const db = getDb();
-    const result = await db.query(`SELECT column_name FROM information_schema.columns WHERE table_name = $1`, [tableName]);
+function buildJunctionIndexStatements(tableName, fieldName, relatedCollection) {
+    const junctionName = `${tableName}_${fieldName}`;
+    return [
+        `CREATE INDEX IF NOT EXISTS "idx_${junctionName}_${relatedCollection}_id" ON "${junctionName}" ("${relatedCollection}_id");`,
+    ];
+}
+function hashConfig(config) {
+    const serialized = JSON.stringify(config.collections);
+    return createHash('sha256').update(serialized).digest('hex');
+}
+async function ensureTrackingTable(db) {
+    await db.exec(`CREATE TABLE IF NOT EXISTS "_infernocms_migrations" (
+    id SERIAL PRIMARY KEY,
+    hash TEXT NOT NULL,
+    operations JSONB NOT NULL,
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );`);
+}
+async function isAlreadyApplied(db, hash) {
+    const result = await db.query(`SELECT COUNT(*) as count FROM "_infernocms_migrations" WHERE hash = $1`, [hash]);
+    return parseInt(result.rows[0]?.count ?? '0', 10) > 0;
+}
+async function recordMigration(db, hash, ops) {
+    const opsJson = JSON.stringify(ops.map(op => {
+        const { destructive, ...rest } = op;
+        return rest;
+    }));
+    await db.query(`INSERT INTO "_infernocms_migrations" (hash, operations) VALUES ($1, $2::jsonb)`, [hash, opsJson]);
+}
+export async function getTableInfo(tableName, db) {
+    const client = db ?? getDb();
+    const result = await client.query(`SELECT column_name FROM information_schema.columns WHERE table_name = $1`, [tableName]);
     if (result.rows.length === 0) {
         return { exists: false, columns: [] };
     }
@@ -145,5 +139,189 @@ export async function getTableInfo(tableName) {
         exists: true,
         columns: result.rows.map((row) => row.column_name),
     };
+}
+async function getDetailedTableInfo(tableName, db) {
+    const colResult = await db.query(`SELECT column_name, data_type, is_nullable, column_default
+     FROM information_schema.columns
+     WHERE table_name = $1
+     ORDER BY ordinal_position`, [tableName]);
+    if (colResult.rows.length === 0)
+        return null;
+    // Get unique constraints
+    const uniqueResult = await db.query(`SELECT kcu.column_name
+     FROM information_schema.table_constraints tc
+     JOIN information_schema.key_column_usage kcu
+       ON tc.constraint_name = kcu.constraint_name
+     WHERE tc.table_name = $1
+       AND tc.constraint_type = 'UNIQUE'`, [tableName]);
+    const uniqueColumns = new Set(uniqueResult.rows.map(r => r.column_name));
+    const columns = new Map();
+    for (const row of colResult.rows) {
+        columns.set(row.column_name, {
+            name: row.column_name,
+            dataType: row.data_type,
+            isNullable: row.is_nullable === 'YES',
+            columnDefault: row.column_default,
+            isUnique: uniqueColumns.has(row.column_name),
+        });
+    }
+    return { columns };
+}
+async function getAllTableNames(db) {
+    const result = await db.query(`SELECT table_name FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`);
+    return result.rows.map(r => r.table_name);
+}
+export async function syncTables(config, options = {}) {
+    const db = options.db ?? getDb();
+    const { force = false, dryRun = false } = options;
+    // Ensure tracking table
+    await ensureTrackingTable(db);
+    // Hash config and check if already applied
+    const hash = hashConfig(config);
+    const applied = await isAlreadyApplied(db, hash);
+    if (applied && !dryRun) {
+        return [];
+    }
+    // Gather actual schema info
+    const tableNames = await getAllTableNames(db);
+    const actual = new Map();
+    for (const name of tableNames) {
+        if (name === '_infernocms_migrations')
+            continue;
+        const info = await getDetailedTableInfo(name, db);
+        if (info)
+            actual.set(name, info);
+    }
+    // Compute diff
+    const allOps = diffSchema(actual, config);
+    if (allOps.length === 0) {
+        if (!applied)
+            await recordMigration(db, hash, []);
+        return [];
+    }
+    if (dryRun) {
+        console.log('\n[dry-run] Planned migration operations:');
+        for (const op of allOps) {
+            const tag = op.destructive ? '[DESTRUCTIVE]' : '[safe]';
+            switch (op.type) {
+                case 'CreateTable':
+                    console.log(`  ${tag} Create table "${op.table}"`);
+                    break;
+                case 'AddColumn':
+                    console.log(`  ${tag} Add column "${op.column}" to "${op.table}"`);
+                    break;
+                case 'DropColumn':
+                    console.log(`  ${tag} Drop column "${op.column}" from "${op.table}"`);
+                    break;
+                case 'AlterColumn':
+                    console.log(`  ${tag} Alter column "${op.column}" in "${op.table}": ${op.description}`);
+                    break;
+                case 'CreateIndex':
+                    console.log(`  ${tag} Create index on "${op.table}"`);
+                    break;
+                case 'CreateJunctionTable':
+                    console.log(`  ${tag} Create junction table "${op.table}"`);
+                    break;
+                case 'DropTable':
+                    console.log(`  ${tag} Drop table "${op.table}"`);
+                    break;
+            }
+        }
+        console.log('');
+        return allOps;
+    }
+    // Separate safe vs destructive
+    const safeOps = allOps.filter(op => !op.destructive);
+    const destructiveOps = allOps.filter(op => op.destructive);
+    // Execute safe ops (create tables first, then add columns, then indexes/junctions)
+    await executeSafeOps(safeOps, config, db);
+    // Execute destructive ops only with force
+    if (destructiveOps.length > 0) {
+        if (force) {
+            await executeDestructiveOps(destructiveOps, db);
+        }
+        else {
+            console.log('\n[migration] Skipping destructive operations (use force mode to apply):');
+            for (const op of destructiveOps) {
+                switch (op.type) {
+                    case 'DropColumn':
+                        console.log(`  - Would drop column "${op.column}" from "${op.table}"`);
+                        break;
+                    case 'DropTable':
+                        console.log(`  - Would drop table "${op.table}"`);
+                        break;
+                    case 'AlterColumn':
+                        console.log(`  - Would alter column "${op.column}" in "${op.table}": ${op.description}`);
+                        break;
+                }
+            }
+            console.log('');
+        }
+    }
+    const executedOps = force ? allOps : safeOps;
+    if (executedOps.length > 0 || !applied) {
+        await recordMigration(db, hash, executedOps);
+    }
+    return executedOps;
+}
+async function executeSafeOps(ops, config, db) {
+    // Phase 1: Create tables
+    for (const op of ops) {
+        if (op.type === 'CreateTable') {
+            const collection = config.collections[op.table];
+            if (collection) {
+                const sql = buildCreateTableSQL(op.table, collection.fields);
+                await db.exec(sql);
+            }
+        }
+    }
+    // Phase 2: Add columns
+    for (const op of ops) {
+        if (op.type === 'AddColumn') {
+            await db.exec(`ALTER TABLE "${op.table}" ADD COLUMN ${op.definition};`);
+        }
+    }
+    // Phase 3: Create junction tables
+    for (const op of ops) {
+        if (op.type === 'CreateJunctionTable') {
+            // Find the collection and field that owns this junction table
+            for (const [tableName, collection] of Object.entries(config.collections)) {
+                for (const [fieldName, fieldConfig] of Object.entries(collection.fields)) {
+                    if (fieldConfig.type === 'relation' && fieldConfig.many && fieldConfig.collection) {
+                        const junctionName = `${tableName}_${fieldName}`;
+                        if (junctionName === op.table) {
+                            const sql = buildJunctionTableSQL(tableName, fieldName, fieldConfig.collection);
+                            await db.exec(sql);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Phase 4: Create indexes
+    for (const op of ops) {
+        if (op.type === 'CreateIndex') {
+            await db.exec(op.sql);
+        }
+    }
+}
+async function executeDestructiveOps(ops, db) {
+    // Drop columns first, then alter, then drop tables
+    for (const op of ops) {
+        if (op.type === 'DropColumn') {
+            await db.exec(`ALTER TABLE "${op.table}" DROP COLUMN "${op.column}";`);
+        }
+    }
+    for (const op of ops) {
+        if (op.type === 'AlterColumn') {
+            await db.exec(op.sql);
+        }
+    }
+    for (const op of ops) {
+        if (op.type === 'DropTable') {
+            await db.exec(`DROP TABLE IF EXISTS "${op.table}" CASCADE;`);
+        }
+    }
 }
 //# sourceMappingURL=migrator.js.map

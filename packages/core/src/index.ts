@@ -53,10 +53,11 @@ export {
   type ConnectionOptions,
 } from './database/connection.js';
 export type { DbClient, QueryResult } from './database/client.js';
-export { syncTables, getTableInfo } from './database/migrator.js';
+export { syncTables, getTableInfo, type SyncOptions } from './database/migrator.js';
 export {
   Repository,
   getRepository,
+  clearRepositories,
   type FindAllOptions,
   type PaginatedResult,
 } from './database/repository.js';
@@ -80,9 +81,22 @@ export { type ParsedFilter } from './api/filters.js';
 export { extractHooks, type HooksMap } from './api/hooks.js';
 export { extractAccess, checkAccess, type AccessMap } from './api/access.js';
 
+// Services
+export {
+  createContentService,
+  validateData,
+  type ContentService,
+  type ListOptions,
+  type ContentServiceOptions,
+  type ValidationError,
+} from './services/content-service.js';
+
 // Storage
 export {
   initStorage,
   getStorage,
   type StorageDriver,
 } from './storage/index.js';
+
+// Context
+export { AppContext } from './context.js';

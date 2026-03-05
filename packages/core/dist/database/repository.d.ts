@@ -1,5 +1,6 @@
 import type { NormalizedCollectionConfig, NormalizedConfig } from '../config/types.js';
 import type { ParsedFilter } from '../api/filters.js';
+import type { DbClient } from './client.js';
 export interface FindAllOptions {
     limit?: number;
     offset?: number;
@@ -24,14 +25,16 @@ export declare class Repository {
     private tableName;
     private collection;
     private config;
+    private db;
     private allowedFields;
-    constructor(collection: NormalizedCollectionConfig, config: NormalizedConfig);
+    constructor(collection: NormalizedCollectionConfig, config: NormalizedConfig, db?: DbClient);
     findAll(options?: FindAllOptions): Promise<PaginatedResult<Record<string, unknown>>>;
     findById(id: number, depth?: number, fields?: string[]): Promise<Record<string, unknown> | null>;
     create(data: Record<string, unknown>): Promise<Record<string, unknown>>;
     update(id: number, data: Record<string, unknown>, partial?: boolean): Promise<Record<string, unknown> | null>;
     delete(id: number): Promise<boolean>;
     private buildSelectClause;
+    private batchResolveRelations;
     private resolveRelations;
     private extractManyRelations;
     private generateSlugs;
@@ -41,5 +44,6 @@ export declare class Repository {
     private buildWhereClause;
     private buildOrderByClause;
 }
-export declare function getRepository(collection: NormalizedCollectionConfig, config: NormalizedConfig): Repository;
+export declare function getRepository(collection: NormalizedCollectionConfig, config: NormalizedConfig, db?: DbClient): Repository;
+export declare function clearRepositories(): void;
 //# sourceMappingURL=repository.d.ts.map

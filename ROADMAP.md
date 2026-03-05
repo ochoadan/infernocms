@@ -29,7 +29,7 @@ Schema parser
 - Support shorthand string syntax ('text!', 'textarea', etc.)
 
 Database layer
-- PGlite (embedded PostgreSQL) with Drizzle ORM
+- PGlite (embedded PostgreSQL) with raw SQL queries
 - Create tables dynamically from config
 - Full CRUD operations with pagination, sorting, filtering
 - Auto-generated id, createdAt, updatedAt columns
@@ -78,12 +78,12 @@ curl -X DELETE http://localhost:4000/api/posts/1
 
 ### Deliverables
 
-- [ ] Relations working (single + many-to-many)
-- [ ] Image/file upload (local storage)
-- [ ] Slug field type with auto-generation
-- [ ] Validation (required, type checking, error display)
-- [ ] CLI starts both API and admin together
-- [ ] Admin UI polish (loading states, error handling, relation pickers)
+- [x] Relations working (single + many-to-many)
+- [x] Image/file upload (local storage)
+- [x] Slug field type with auto-generation
+- [x] Validation (required, type checking, error display)
+- [x] CLI starts both API and admin together
+- [x] Admin UI polish (loading states, error handling, relation pickers)
 
 ### Week 1: Relations + Slugs
 
@@ -157,19 +157,19 @@ A developer can:
 
 ### Deliverables
 
-- [ ] Full PostgreSQL support (switch via DATABASE_URL)
-- [ ] S3/R2 file storage
-- [ ] Rich text editor (Plate)
-- [ ] Blocks field type
-- [ ] Type generation (.infernocms/types.ts)
+- [x] Full PostgreSQL support (switch via DATABASE_URL)
+- [x] S3/R2 file storage
+- [x] Rich text editor (Plate)
+- [x] Blocks field type
+- [x] Type generation (.infernocms/types.ts)
 
 ### Week 4: Production database + storage
 
 ```
 Day 1-2: PostgreSQL connection
 - Detect DATABASE_URL environment variable
-- Switch from PGlite to pg/postgres.js driver
-- Same Drizzle ORM code works with both
+- Switch from PGlite to postgres.js driver
+- Same raw SQL works with both
 - Connection pooling for production
 
 Day 3-4: Cloud storage
@@ -223,10 +223,10 @@ Day 4-5: Bug fixes, edge cases, polish
 
 ### Deliverables
 
-- [ ] Draft/published status workflow
-- [ ] Hooks system (before/after CRUD)
-- [ ] Access control (per-collection permissions)
-- [ ] API filtering improvements (field selection, advanced filters)
+- [x] Draft/published status workflow
+- [x] Hooks system (before/after CRUD)
+- [x] Access control (per-collection permissions)
+- [x] API filtering improvements (field selection, advanced filters)
 - [ ] Documentation site
 
 ### Week 7: Content workflow
@@ -363,14 +363,13 @@ Prioritize based on user feedback:
 | API framework | Fastify | 3x faster than Express, good DX |
 | Database (dev) | PGlite | Zero setup, real PostgreSQL syntax |
 | Database (prod) | PostgreSQL | Same code, just change connection |
-| ORM | Drizzle | TypeScript-native, no codegen |
+| Database access | Raw SQL | Direct SQL queries, no ORM overhead |
 | Config loader | jiti | Load TypeScript configs directly |
 | CLI | cac | Lightweight CLI framework |
 | Admin framework | Next.js 15 | React ecosystem, can self-host |
 | Admin components | shadcn/ui | Copy-paste, customizable |
-| Admin tables | TanStack Table | Headless, flexible |
-| Rich text | Plate | Best block-based editor |
-| File storage | Local / S3 / R2 | Flexible, cost-effective |
+| Rich text | Plate | Block-based rich text editor |
+| File storage | Local / S3 | Flexible, cost-effective |
 | Package manager | pnpm | Fast, disk efficient |
 | Monorepo | pnpm workspaces | Simple, built-in |
 
@@ -450,7 +449,7 @@ Track major decisions here:
 |------|----------|-----------|
 | 2026-01-22 | PGlite for dev, Postgres for prod | Zero-config + real PostgreSQL syntax in dev, same code in prod |
 | 2026-01-22 | Fastify over Express | Performance, built-in schema validation |
-| 2026-01-22 | Drizzle over Prisma | True TypeScript-first, no codegen step |
+| 2026-01-22 | Raw SQL over Drizzle/Prisma | Direct queries, no ORM overhead, simpler codebase |
 | 2026-01-22 | jiti for config loading | Load TypeScript configs without build step |
 | 2026-01-22 | cac for CLI | Lightweight, good TypeScript support |
 | 2026-01-22 | Integer auto-increment IDs | Simple, works with PGlite and Postgres, no UUID complexity |

@@ -1,6 +1,7 @@
 import { getDb } from './connection.js';
 const MAX_PER_PAGE = 100;
 const MAX_DEPTH = 2;
+const SAFE_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 function slugify(text) {
     return text
         .toLowerCase()
@@ -14,35 +15,44 @@ export class Repository {
     tableName;
     collection;
     config;
+    db;
     allowedFields;
-    constructor(collection, config) {
+    constructor(collection, config, db) {
+        if (!SAFE_IDENTIFIER.test(collection.name)) {
+            throw new Error(`Unsafe collection name: "${collection.name}"`);
+        }
+        for (const fieldName of Object.keys(collection.fields)) {
+            if (!SAFE_IDENTIFIER.test(fieldName)) {
+                throw new Error(`Unsafe field name in ${collection.name}: "${fieldName}"`);
+            }
+        }
         this.tableName = collection.name;
         this.collection = collection;
         this.config = config;
+        this.db = db ?? getDb();
         this.allowedFields = new Set([
             ...Object.keys(collection.fields),
             'id', 'createdAt', 'updatedAt',
         ]);
     }
     async findAll(options = {}) {
-        const db = getDb();
         const perPage = Math.min(options.perPage ?? options.limit ?? 10, MAX_PER_PAGE);
         const page = options.page ?? Math.floor((options.offset ?? 0) / perPage) + 1;
         const offset = options.offset ?? (page - 1) * perPage;
         const depth = Math.min(options.depth ?? 0, MAX_DEPTH);
         const where = this.buildWhereClause(options.filters, options.search);
         const orderBy = this.buildOrderByClause(options.sort);
-        const countResult = await db.query(`SELECT COUNT(*) as count FROM "${this.tableName}"${where.sql}`, where.params);
+        const countResult = await this.db.query(`SELECT COUNT(*) as count FROM "${this.tableName}"${where.sql}`, where.params);
         const total = parseInt(countResult.rows[0]?.count ?? '0', 10);
         const limitIdx = where.params.length + 1;
         const offsetIdx = where.params.length + 2;
         const dataParams = [...where.params, perPage, offset];
         const selectClause = this.buildSelectClause(options.fields);
         const query = `SELECT ${selectClause} FROM "${this.tableName}"${where.sql}${orderBy} LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
-        const result = await db.query(query, dataParams);
+        const result = await this.db.query(query, dataParams);
         let data = result.rows;
         if (depth > 0) {
-            data = await Promise.all(data.map((row) => this.resolveRelations(row, depth)));
+            data = await this.batchResolveRelations(data, depth);
         }
         return {
             data,
@@ -55,9 +65,8 @@ export class Repository {
         };
     }
     async findById(id, depth = 0, fields) {
-        const db = getDb();
         const selectClause = this.buildSelectClause(fields);
-        const result = await db.query(`SELECT ${selectClause} FROM "${this.tableName}" WHERE id = $1`, [id]);
+        const result = await this.db.query(`SELECT ${selectClause} FROM "${this.tableName}" WHERE id = $1`, [id]);
         const row = result.rows[0] ?? null;
         if (row && depth > 0) {
             return this.resolveRelations(row, Math.min(depth, MAX_DEPTH));
@@ -65,21 +74,21 @@ export class Repository {
         return row;
     }
     async create(data) {
-        const db = getDb();
         const manyRelations = this.extractManyRelations(data);
         const withSlugs = await this.generateSlugs(data);
         const sanitized = this.sanitizeData(withSlugs);
         const fields = Object.keys(sanitized);
         const values = Object.values(sanitized);
         const placeholders = values.map((_, i) => `$${i + 1}`);
-        const query = `INSERT INTO "${this.tableName}" (${fields.map(f => `"${f}"`).join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
-        const result = await db.query(query, values);
-        const row = result.rows[0];
-        await this.saveManyRelations(row.id, manyRelations);
-        return row;
+        return this.db.transaction(async (tx) => {
+            const query = `INSERT INTO "${this.tableName}" (${fields.map(f => `"${f}"`).join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
+            const result = await tx.query(query, values);
+            const row = result.rows[0];
+            await this.saveManyRelations(row.id, manyRelations, tx);
+            return row;
+        });
     }
     async update(id, data, partial = false) {
-        const db = getDb();
         if (!partial) {
             const existing = await this.findById(id);
             if (!existing)
@@ -92,28 +101,38 @@ export class Repository {
         if (fields.length === 0 && Object.keys(manyRelations).length === 0) {
             return this.findById(id);
         }
-        let row = null;
-        if (fields.length > 0) {
-            const setClause = fields
-                .map((field, i) => `"${field}" = $${i + 1}`)
-                .join(', ');
-            const values = [...Object.values(sanitized), id];
-            const query = `UPDATE "${this.tableName}" SET ${setClause}, "updatedAt" = CURRENT_TIMESTAMP WHERE id = $${values.length} RETURNING *`;
-            const result = await db.query(query, values);
-            row = result.rows[0] ?? null;
-        }
-        else {
-            row = await this.findById(id);
-        }
-        if (row) {
-            await this.saveManyRelations(id, manyRelations);
-        }
-        return row;
+        return this.db.transaction(async (tx) => {
+            let row = null;
+            if (fields.length > 0) {
+                const setClause = fields
+                    .map((field, i) => `"${field}" = $${i + 1}`)
+                    .join(', ');
+                const values = [...Object.values(sanitized), id];
+                const query = `UPDATE "${this.tableName}" SET ${setClause}, "updatedAt" = CURRENT_TIMESTAMP WHERE id = $${values.length} RETURNING *`;
+                const result = await tx.query(query, values);
+                row = result.rows[0] ?? null;
+            }
+            else {
+                row = await this.findById(id);
+            }
+            if (row) {
+                await this.saveManyRelations(id, manyRelations, tx);
+            }
+            return row;
+        });
     }
     async delete(id) {
-        const db = getDb();
-        const result = await db.query(`DELETE FROM "${this.tableName}" WHERE id = $1`, [id]);
-        return (result.affectedRows ?? 0) > 0;
+        return this.db.transaction(async (tx) => {
+            // Delete junction table rows for many-to-many relations
+            for (const [fieldName, fieldConfig] of Object.entries(this.collection.fields)) {
+                if (fieldConfig.type === 'relation' && fieldConfig.many && fieldConfig.collection) {
+                    const junctionTable = `${this.tableName}_${fieldName}`;
+                    await tx.query(`DELETE FROM "${junctionTable}" WHERE "${this.tableName}_id" = $1`, [id]);
+                }
+            }
+            const result = await tx.query(`DELETE FROM "${this.tableName}" WHERE id = $1`, [id]);
+            return (result.affectedRows ?? 0) > 0;
+        });
     }
     buildSelectClause(fields) {
         if (!fields || fields.length === 0)
@@ -123,10 +142,86 @@ export class Repository {
             safe.unshift('id');
         return safe.map((f) => `"${f}"`).join(', ');
     }
+    async batchResolveRelations(rows, depth) {
+        if (depth <= 0 || rows.length === 0)
+            return rows;
+        const resolved = rows.map((row) => ({ ...row }));
+        for (const [fieldName, fieldConfig] of Object.entries(this.collection.fields)) {
+            if (fieldConfig.type !== 'relation' || !fieldConfig.collection)
+                continue;
+            const relatedCollectionConfig = this.config.collections[fieldConfig.collection];
+            if (!relatedCollectionConfig)
+                continue;
+            if (fieldConfig.many) {
+                // For many-to-many, batch fetch all junction rows for all parent IDs
+                const parentIds = resolved.map((r) => r.id).filter((id) => id != null);
+                if (parentIds.length === 0)
+                    continue;
+                const junctionTable = `${this.tableName}_${fieldName}`;
+                const relatedTable = fieldConfig.collection;
+                const placeholders = parentIds.map((_, i) => `$${i + 1}`).join(', ');
+                const jResult = await this.db.query(`SELECT j."${this.tableName}_id" as __parent_id, r.* FROM "${relatedTable}" r INNER JOIN "${junctionTable}" j ON j."${relatedTable}_id" = r.id WHERE j."${this.tableName}_id" IN (${placeholders}) ORDER BY j."sortOrder" ASC`, parentIds);
+                // Group results by parent ID
+                const grouped = new Map();
+                for (const row of jResult.rows) {
+                    const parentId = row.__parent_id;
+                    delete row.__parent_id;
+                    if (!grouped.has(parentId))
+                        grouped.set(parentId, []);
+                    grouped.get(parentId).push(row);
+                }
+                if (depth > 1) {
+                    const relRepo = new Repository(relatedCollectionConfig, this.config, this.db);
+                    const allRelated = jResult.rows.map((r) => {
+                        const copy = { ...r };
+                        delete copy.__parent_id;
+                        return copy;
+                    });
+                    const resolvedRelated = await relRepo.batchResolveRelations(allRelated.filter((r, i, arr) => arr.findIndex((a) => a.id === r.id) === i), depth - 1);
+                    const resolvedMap = new Map(resolvedRelated.map((r) => [r.id, r]));
+                    for (const row of resolved) {
+                        const related = grouped.get(row.id) || [];
+                        row[fieldName] = related.map((r) => resolvedMap.get(r.id) || r);
+                    }
+                }
+                else {
+                    for (const row of resolved) {
+                        row[fieldName] = grouped.get(row.id) || [];
+                    }
+                }
+            }
+            else {
+                // For single relations, collect all FK values and batch fetch
+                const fkValues = resolved
+                    .map((r) => r[fieldName])
+                    .filter((v) => v != null);
+                const uniqueFks = [...new Set(fkValues)];
+                if (uniqueFks.length === 0)
+                    continue;
+                const placeholders = uniqueFks.map((_, i) => `$${i + 1}`).join(', ');
+                const relResult = await this.db.query(`SELECT * FROM "${fieldConfig.collection}" WHERE id IN (${placeholders})`, uniqueFks);
+                let lookupMap;
+                if (depth > 1) {
+                    const relRepo = new Repository(relatedCollectionConfig, this.config, this.db);
+                    const resolvedRelated = await relRepo.batchResolveRelations(relResult.rows, depth - 1);
+                    lookupMap = new Map(resolvedRelated.map((r) => [r.id, r]));
+                }
+                else {
+                    lookupMap = new Map(relResult.rows.map((r) => [r.id, r]));
+                }
+                for (const row of resolved) {
+                    const fkValue = row[fieldName];
+                    if (fkValue != null) {
+                        row[fieldName] = lookupMap.get(fkValue) ?? null;
+                    }
+                }
+            }
+        }
+        return resolved;
+    }
     async resolveRelations(row, depth) {
         if (depth <= 0)
             return row;
-        const db = getDb();
         const resolved = { ...row };
         for (const [fieldName, fieldConfig] of Object.entries(this.collection.fields)) {
             if (fieldConfig.type !== 'relation' || !fieldConfig.collection)
@@ -137,9 +232,9 @@ export class Repository {
             if (fieldConfig.many) {
                 const junctionTable = `${this.tableName}_${fieldName}`;
                 const relatedTable = fieldConfig.collection;
-                const jResult = await db.query(`SELECT r.* FROM "${relatedTable}" r INNER JOIN "${junctionTable}" j ON j."${relatedTable}_id" = r.id WHERE j."${this.tableName}_id" = $1 ORDER BY j."sortOrder" ASC`, [row.id]);
+                const jResult = await this.db.query(`SELECT r.* FROM "${relatedTable}" r INNER JOIN "${junctionTable}" j ON j."${relatedTable}_id" = r.id WHERE j."${this.tableName}_id" = $1 ORDER BY j."sortOrder" ASC`, [row.id]);
                 if (depth > 1) {
-                    const relRepo = new Repository(relatedCollectionConfig, this.config);
+                    const relRepo = new Repository(relatedCollectionConfig, this.config, this.db);
                     resolved[fieldName] = await Promise.all(jResult.rows.map((r) => relRepo.resolveRelations(r, depth - 1)));
                 }
                 else {
@@ -149,10 +244,10 @@ export class Repository {
             else {
                 const fkValue = row[fieldName];
                 if (fkValue != null) {
-                    const relResult = await db.query(`SELECT * FROM "${fieldConfig.collection}" WHERE id = $1`, [fkValue]);
+                    const relResult = await this.db.query(`SELECT * FROM "${fieldConfig.collection}" WHERE id = $1`, [fkValue]);
                     const relatedRow = relResult.rows[0] ?? null;
                     if (relatedRow && depth > 1) {
-                        const relRepo = new Repository(relatedCollectionConfig, this.config);
+                        const relRepo = new Repository(relatedCollectionConfig, this.config, this.db);
                         resolved[fieldName] = await relRepo.resolveRelations(relatedRow, depth - 1);
                     }
                     else {
@@ -193,7 +288,6 @@ export class Repository {
         return result;
     }
     async ensureUniqueSlug(fieldName, baseSlug, excludeId) {
-        const db = getDb();
         let counter = 0;
         while (counter <= 100) {
             const candidate = counter === 0 ? baseSlug : `${baseSlug}-${counter}`;
@@ -203,7 +297,7 @@ export class Repository {
                 query += ` AND id != $2`;
                 params.push(excludeId);
             }
-            const result = await db.query(query, params);
+            const result = await this.db.query(query, params);
             const count = parseInt(result.rows[0]?.count ?? '0', 10);
             if (count === 0) {
                 return candidate;
@@ -212,18 +306,26 @@ export class Repository {
         }
         return `${baseSlug}-${Date.now()}`;
     }
-    async saveManyRelations(rowId, manyRelations) {
-        const db = getDb();
+    async saveManyRelations(rowId, manyRelations, tx) {
+        const client = tx ?? this.db;
         for (const [fieldName, ids] of Object.entries(manyRelations)) {
             const fieldConfig = this.collection.fields[fieldName];
             if (!fieldConfig || fieldConfig.type !== 'relation' || !fieldConfig.collection)
                 continue;
             const junctionTable = `${this.tableName}_${fieldName}`;
             const relatedTable = fieldConfig.collection;
-            await db.query(`DELETE FROM "${junctionTable}" WHERE "${this.tableName}_id" = $1`, [rowId]);
+            await client.query(`DELETE FROM "${junctionTable}" WHERE "${this.tableName}_id" = $1`, [rowId]);
+            if (ids.length === 0)
+                continue;
+            // Multi-row INSERT for all junction entries
+            const valueClauses = [];
+            const params = [];
             for (let i = 0; i < ids.length; i++) {
-                await db.query(`INSERT INTO "${junctionTable}" ("${this.tableName}_id", "${relatedTable}_id", "sortOrder") VALUES ($1, $2, $3)`, [rowId, ids[i], i]);
+                const offset = i * 3;
+                valueClauses.push(`($${offset + 1}, $${offset + 2}, $${offset + 3})`);
+                params.push(rowId, ids[i], i);
             }
+            await client.query(`INSERT INTO "${junctionTable}" ("${this.tableName}_id", "${relatedTable}_id", "sortOrder") VALUES ${valueClauses.join(', ')}`, params);
         }
     }
     sanitizeData(data) {
@@ -342,12 +444,16 @@ export class Repository {
     }
 }
 const repositories = new Map();
-export function getRepository(collection, config) {
-    let repo = repositories.get(collection.name);
+export function getRepository(collection, config, db) {
+    const key = collection.name;
+    let repo = repositories.get(key);
     if (!repo) {
-        repo = new Repository(collection, config);
-        repositories.set(collection.name, repo);
+        repo = new Repository(collection, config, db);
+        repositories.set(key, repo);
     }
     return repo;
+}
+export function clearRepositories() {
+    repositories.clear();
 }
 //# sourceMappingURL=repository.js.map

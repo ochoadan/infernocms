@@ -16,6 +16,7 @@ export interface ErrorResponse {
   error: {
     message: string;
     code?: string;
+    details?: { field: string; message: string }[];
   };
 }
 
@@ -30,11 +31,12 @@ export function formatPaginatedResponse<T>(
   return { data, meta };
 }
 
-export function formatError(message: string, code?: string): ErrorResponse {
+export function formatError(message: string, code?: string, details?: { field: string; message: string }[]): ErrorResponse {
   return {
     error: {
       message,
       ...(code && { code }),
+      ...(details && details.length > 0 && { details }),
     },
   };
 }

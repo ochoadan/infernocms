@@ -1,36 +1,53 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSchema } from "@/components/providers";
 import { DataTable } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { fetchCollection, deleteItem, type PaginatedResponse } from "@/lib/api";
+import { useToast } from "@/components/ui/use-toast";
 import { Add01Icon, RefreshIcon } from "@hugeicons/react";
 
 export default function CollectionPage() {
   const params = useParams();
   const router = useRouter();
   const { schema } = useSchema();
+  const { toast } = useToast();
   const collectionName = params.collection as string;
 
   const [data, setData] = useState<PaginatedResponse<Record<string, unknown>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  const [sort, setSort] = useState("-createdAt");
+  const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
   const collection = schema?.collections[collectionName];
 
-  const loadData = async (pageNum: number) => {
+  const loadData = useCallback(async (pageNum: number, sortStr?: string, searchStr?: string, perPageNum?: number) => {
     try {
       setLoading(true);
       setError(null);
       const result = await fetchCollection(collectionName, {
         page: pageNum,
-        perPage: 10,
-        sort: "-createdAt",
+        perPage: perPageNum ?? perPage,
+        sort: sortStr ?? sort,
         depth: 1,
+        search: searchStr !== undefined ? searchStr : search || undefined,
       });
       setData(result);
       setPage(pageNum);
@@ -40,7 +57,7 @@ export default function CollectionPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [collectionName, sort, search, perPage]);
 
   useEffect(() => {
     if (collection) {
@@ -48,17 +65,37 @@ export default function CollectionPage() {
     }
   }, [collectionName, collection]);
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this item?")) {
-      return;
-    }
+  const handlePageChange = (pageNum: number) => {
+    loadData(pageNum);
+  };
+
+  const handleSortChange = (newSort: string) => {
+    setSort(newSort);
+    loadData(1, newSort);
+  };
+
+  const handleSearchChange = (newSearch: string) => {
+    setSearch(newSearch);
+    loadData(1, undefined, newSearch);
+  };
+
+  const handlePerPageChange = (newPerPage: number) => {
+    setPerPage(newPerPage);
+    loadData(1, undefined, undefined, newPerPage);
+  };
+
+  const handleDelete = async () => {
+    if (deleteTarget === null) return;
+    const id = deleteTarget;
+    setDeleteTarget(null);
 
     try {
       await deleteItem(collectionName, id);
+      toast({ title: "Item deleted", variant: "success" });
       loadData(page);
     } catch (err) {
       console.error("Failed to delete:", err);
-      alert("Failed to delete item");
+      toast({ title: "Failed to delete item", variant: "destructive" });
     }
   };
 
@@ -103,7 +140,7 @@ export default function CollectionPage() {
 
       <Card>
         <CardContent className="p-0">
-          {loading ? (
+          {loading && !data ? (
             <div className="flex h-64 items-center justify-center">
               <p className="text-muted-foreground">Loading...</p>
             </div>
@@ -120,9 +157,14 @@ export default function CollectionPage() {
               data={data.data}
               fields={collection.fields}
               meta={data.meta}
-              onPageChange={loadData}
+              sort={sort}
+              search={search}
+              onPageChange={handlePageChange}
+              onSortChange={handleSortChange}
+              onSearchChange={handleSearchChange}
+              onPerPageChange={handlePerPageChange}
               onEdit={handleEdit}
-              onDelete={handleDelete}
+              onDelete={(id) => setDeleteTarget(id)}
             />
           ) : (
             <div className="flex h-64 items-center justify-center">
@@ -131,6 +173,21 @@ export default function CollectionPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete item</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete item #{deleteTarget}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

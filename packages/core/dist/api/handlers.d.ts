@@ -1,5 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { NormalizedCollectionConfig, NormalizedConfig, CollectionHooks, CollectionAccess } from '../config/types.js';
+import type { AppContext } from '../context.js';
 interface ListQuerystring {
     limit?: string;
     offset?: string;
@@ -21,6 +22,7 @@ interface GetQuerystring {
 export interface HandlerOptions {
     hooks?: CollectionHooks;
     access?: CollectionAccess;
+    ctx?: AppContext;
 }
 export declare function createListHandler(collection: NormalizedCollectionConfig, config: NormalizedConfig, options?: HandlerOptions): (request: FastifyRequest<{
     Querystring: ListQuerystring;

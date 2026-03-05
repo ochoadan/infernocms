@@ -1,14 +1,22 @@
 const API_BASE = '/api';
 
-function getAdminHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
-  if (typeof window !== 'undefined') {
-    const adminKey = localStorage.getItem('infernocms-admin-key') ?? '';
-    if (adminKey) {
-      headers['X-Admin-Key'] = adminKey;
-    }
-  }
-  return headers;
+const fetchOpts: RequestInit = { credentials: 'include' };
+
+export async function login(key: string): Promise<boolean> {
+  const res = await fetch(`${API_BASE}/_auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ key }),
+  });
+  return res.ok;
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${API_BASE}/_auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
+  });
 }
 
 export interface SchemaField {
@@ -17,6 +25,7 @@ export interface SchemaField {
   default?: unknown;
   options?: string[];
   integer?: boolean;
+  maxLength?: number;
   collection?: string;
   many?: boolean;
   from?: string;
@@ -54,9 +63,7 @@ export interface SingleResponse<T> {
 }
 
 export async function fetchSchema(): Promise<Schema> {
-  const res = await fetch(`${API_BASE}/_schema`, {
-    headers: getAdminHeaders(),
-  });
+  const res = await fetch(`${API_BASE}/_schema`, fetchOpts);
   if (!res.ok) {
     const err = new Error('Failed to fetch schema');
     (err as any).status = res.status;
@@ -67,16 +74,17 @@ export async function fetchSchema(): Promise<Schema> {
 
 export async function fetchCollection<T = Record<string, unknown>>(
   collection: string,
-  params?: { page?: number; perPage?: number; sort?: string; depth?: number }
+  params?: { page?: number; perPage?: number; sort?: string; depth?: number; search?: string }
 ): Promise<PaginatedResponse<T>> {
   const searchParams = new URLSearchParams();
   if (params?.page) searchParams.set('page', String(params.page));
   if (params?.perPage) searchParams.set('perPage', String(params.perPage));
   if (params?.sort) searchParams.set('sort', params.sort);
   if (params?.depth !== undefined) searchParams.set('depth', String(params.depth));
+  if (params?.search) searchParams.set('search', params.search);
 
   const url = `${API_BASE}/${collection}${searchParams.toString() ? `?${searchParams}` : ''}`;
-  const res = await fetch(url, { headers: getAdminHeaders() });
+  const res = await fetch(url, fetchOpts);
   if (!res.ok) throw new Error(`Failed to fetch ${collection}`);
   return res.json();
 }
@@ -90,7 +98,7 @@ export async function fetchItem<T = Record<string, unknown>>(
   if (depth !== undefined) searchParams.set('depth', String(depth));
 
   const url = `${API_BASE}/${collection}/${id}${searchParams.toString() ? `?${searchParams}` : ''}`;
-  const res = await fetch(url, { headers: getAdminHeaders() });
+  const res = await fetch(url, fetchOpts);
   if (!res.ok) throw new Error(`Failed to fetch ${collection}/${id}`);
   return res.json();
 }
@@ -101,7 +109,8 @@ export async function createItem<T = Record<string, unknown>>(
 ): Promise<SingleResponse<T>> {
   const res = await fetch(`${API_BASE}/${collection}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`Failed to create ${collection}`);
@@ -115,7 +124,8 @@ export async function updateItem<T = Record<string, unknown>>(
 ): Promise<SingleResponse<T>> {
   const res = await fetch(`${API_BASE}/${collection}/${id}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`Failed to update ${collection}/${id}`);
@@ -128,7 +138,7 @@ export async function deleteItem(
 ): Promise<void> {
   const res = await fetch(`${API_BASE}/${collection}/${id}`, {
     method: 'DELETE',
-    headers: getAdminHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) throw new Error(`Failed to delete ${collection}/${id}`);
 }
@@ -139,7 +149,7 @@ export async function uploadFile(file: File): Promise<SingleResponse<{ url: stri
 
   const res = await fetch(`${API_BASE}/_upload`, {
     method: 'POST',
-    headers: getAdminHeaders(),
+    credentials: 'include',
     body: formData,
   });
   if (!res.ok) throw new Error('Failed to upload file');
@@ -152,10 +162,12 @@ export async function searchCollection<T = Record<string, unknown>>(
 ): Promise<PaginatedResponse<T>> {
   const searchParams = new URLSearchParams();
   searchParams.set('perPage', '50');
-  if (query) searchParams.set('sort', 'createdAt');
+  if (query) {
+    searchParams.set('search', query);
+  }
 
   const url = `${API_BASE}/${collection}?${searchParams}`;
-  const res = await fetch(url, { headers: getAdminHeaders() });
+  const res = await fetch(url, fetchOpts);
   if (!res.ok) throw new Error(`Failed to search ${collection}`);
   return res.json();
 }

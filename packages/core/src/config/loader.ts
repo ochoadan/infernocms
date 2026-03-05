@@ -7,8 +7,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export async function loadConfig(configPath: string): Promise<InfernoCMSConfig> {
+  // Create a fresh jiti instance each call to bypass module cache,
+  // ensuring config hot-reload picks up changes.
   const jiti = createJiti(__dirname, {
     interopDefault: true,
+    moduleCache: false,
   });
 
   const loaded = await jiti.import(configPath);

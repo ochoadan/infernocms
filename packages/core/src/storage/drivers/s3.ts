@@ -46,9 +46,16 @@ export function createS3Storage(options: S3StorageOptions): StorageDriver {
       return buildUrl(key);
     },
     async delete(url: string): Promise<void> {
-      const key = url.includes(prefix)
-        ? url.substring(url.indexOf(prefix))
-        : `${prefix}${url.split('/').pop()}`;
+      let key: string;
+      if (url.includes(prefix)) {
+        key = url.substring(url.indexOf(prefix));
+      } else {
+        const name = url.split('/').pop();
+        if (!name) return;
+        key = `${prefix}${name}`;
+      }
+
+      if (key.includes('..') || !key.startsWith(prefix)) return;
 
       await client.send(new DeleteObjectCommand({
         Bucket: options.bucket,

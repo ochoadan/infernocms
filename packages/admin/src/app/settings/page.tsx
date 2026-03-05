@@ -1,32 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useSchema } from "@/components/providers";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshIcon } from "@hugeicons/react";
+import { RefreshIcon, Logout03Icon } from "@hugeicons/react";
+import { logout } from "@/lib/api";
 
 export default function SettingsPage() {
   const { schema, error, refresh } = useSchema();
-  const [adminKey, setAdminKey] = useState("");
-  const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setAdminKey(localStorage.getItem("infernocms-admin-key") ?? "");
-    }
-  }, []);
-
-  const handleSaveKey = () => {
-    if (typeof window !== "undefined") {
-      if (adminKey) {
-        localStorage.setItem("infernocms-admin-key", adminKey);
-      } else {
-        localStorage.removeItem("infernocms-admin-key");
-      }
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    }
+  const handleLogout = async () => {
+    await logout();
+    refresh();
   };
 
   return (
@@ -73,32 +58,24 @@ export default function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Admin Key</CardTitle>
+            <CardTitle>Session</CardTitle>
             <CardDescription>
-              Set an admin key to bypass access control rules
+              Manage your admin session
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div>
-                <input
-                  type="password"
-                  value={adminKey}
-                  onChange={(e) => setAdminKey(e.target.value)}
-                  placeholder="Enter admin secret key"
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
+              <div className="flex items-center justify-between py-2">
+                <span className="text-sm text-muted-foreground">Status</span>
+                <span className="flex items-center gap-2">
+                  <span className={`h-2.5 w-2.5 rounded-full ${schema ? 'bg-green-500' : 'bg-muted'}`} />
+                  {schema ? 'Connected' : 'Not connected'}
+                </span>
               </div>
-              <div className="flex items-center gap-3">
-                <Button onClick={handleSaveKey}>
-                  Save Key
-                </Button>
-                {saved && (
-                  <span className="text-sm text-green-600 dark:text-green-400">
-                    Saved
-                  </span>
-                )}
-              </div>
+              <Button variant="outline" onClick={handleLogout}>
+                <Logout03Icon className="mr-2 h-4 w-4" />
+                Sign out
+              </Button>
             </div>
           </CardContent>
         </Card>

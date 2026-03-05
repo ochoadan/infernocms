@@ -1,7 +1,13 @@
-import { extname } from 'node:path';
+import { extname as nodeExtname } from 'node:path';
 import { createListHandler, createGetHandler, createCreateHandler, createUpdateHandler, createDeleteHandler, } from './handlers.js';
 import { formatResponse, formatError } from './response.js';
 import { getStorage } from '../storage/index.js';
+const ALLOWED_UPLOAD_EXTENSIONS = new Set([
+    '.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif',
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt',
+    '.mp4', '.webm', '.mp3', '.wav', '.ogg',
+    '.zip', '.json',
+]);
 function requireAuth(request, reply) {
     const user = request.user;
     if (!user) {
@@ -11,7 +17,7 @@ function requireAuth(request, reply) {
     }
     return true;
 }
-export async function registerRoutes(app, config, hooks, access, auth) {
+export async function registerRoutes(app, config, hooks, access, auth, storage, ctx) {
     // Schema endpoint for admin UI
     app.get('/api/_schema', async (request, reply) => {
         if (auth && !requireAuth(request, reply))
@@ -34,10 +40,15 @@ export async function registerRoutes(app, config, hooks, access, auth) {
             reply.status(400);
             return formatError('No file provided');
         }
+        const ext = nodeExtname(file.filename).toLowerCase();
+        if (!ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
+            reply.status(400);
+            return formatError(`File type '${ext}' is not allowed`);
+        }
         const buffer = await file.toBuffer();
-        const storage = getStorage();
-        const url = await storage.upload(file.filename, buffer, file.mimetype);
-        return formatResponse({ url, filename: file.filename, ext: extname(file.filename) });
+        const storageDriver = storage ?? getStorage();
+        const url = await storageDriver.upload(file.filename, buffer, file.mimetype);
+        return formatResponse({ url, filename: file.filename, ext });
     });
     // Collection CRUD routes
     for (const collection of Object.values(config.collections)) {
@@ -57,6 +68,7 @@ export async function registerRoutes(app, config, hooks, access, auth) {
         const handlerOpts = {
             hooks: hooks?.[collection.name],
             access: effectiveAccess,
+            ctx,
         };
         app.get(basePath, createListHandler(collection, config, handlerOpts));
         app.get(`${basePath}/:id`, createGetHandler(collection, config, handlerOpts));
