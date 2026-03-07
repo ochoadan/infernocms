@@ -279,6 +279,27 @@ export interface ContentServiceOptions {
   hooks?: CollectionHooks;
 }
 
+export function valuesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+export function onlySilentFieldsChanged(
+  collection: NormalizedCollectionConfig,
+  existing: Record<string, unknown>,
+  cleaned: Record<string, unknown>
+): boolean {
+  for (const [key, newValue] of Object.entries(cleaned)) {
+    const fieldConfig = collection.fields[key];
+    if (!fieldConfig) continue;
+    if (valuesEqual(existing[key], newValue)) continue;
+    if (!fieldConfig.silent) return false;
+  }
+  return true;
+}
+
 export function createContentService(
   collection: NormalizedCollectionConfig,
   config: NormalizedConfig,
@@ -359,7 +380,8 @@ export function createContentService(
 
       const cleaned = validation.data;
 
-      const item = await repo.update(id, cleaned, partial);
+      const skipTimestamp = onlySilentFieldsChanged(collection, existing, cleaned);
+      const item = await repo.update(id, cleaned, partial, { skipTimestamp });
 
       if (item && hooks?.afterUpdate) {
         await hooks.afterUpdate({ id, item });

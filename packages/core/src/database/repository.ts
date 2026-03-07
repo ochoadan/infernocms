@@ -68,7 +68,9 @@ export class Repository {
     this.db = db ?? getDb();
     this.allowedFields = new Set([
       ...Object.keys(collection.fields),
-      'id', 'createdAt', 'updatedAt',
+      'id',
+      ...(collection.timestamps.createdAt.enabled ? ['createdAt'] : []),
+      ...(collection.timestamps.updatedAt.enabled ? ['updatedAt'] : []),
     ]);
   }
 
@@ -151,7 +153,8 @@ export class Repository {
   async update(
     id: number,
     data: Record<string, unknown>,
-    partial = false
+    partial = false,
+    options?: { skipTimestamp?: boolean }
   ): Promise<Record<string, unknown> | null> {
     const manyRelations = this.extractManyRelations(data);
 
@@ -184,7 +187,10 @@ export class Repository {
           .join(', ');
         const values = [...Object.values(sanitized), id];
 
-        const query = `UPDATE "${this.tableName}" SET ${setClause}, "updatedAt" = CURRENT_TIMESTAMP WHERE id = $${values.length} RETURNING *`;
+        const bumpTimestamp = !options?.skipTimestamp
+          && this.collection.timestamps.updatedAt.enabled;
+        const timestampClause = bumpTimestamp ? ', "updatedAt" = CURRENT_TIMESTAMP' : '';
+        const query = `UPDATE "${this.tableName}" SET ${setClause}${timestampClause} WHERE id = $${values.length} RETURNING *`;
 
         const result = await tx.query<Record<string, unknown>>(query, values);
         row = result.rows[0] ?? null;
@@ -583,15 +589,19 @@ export class Repository {
   }
 
   private buildOrderByClause(sort?: string): string {
+    const defaultSort = this.collection.timestamps.createdAt.enabled
+      ? ' ORDER BY "createdAt" DESC'
+      : ' ORDER BY "id" DESC';
+
     if (!sort) {
-      return ' ORDER BY "createdAt" DESC';
+      return defaultSort;
     }
 
     const direction = sort.startsWith('-') ? 'DESC' : 'ASC';
     const field = sort.startsWith('-') ? sort.slice(1) : sort;
 
     if (!this.allowedFields.has(field)) {
-      return ' ORDER BY "createdAt" DESC';
+      return defaultSort;
     }
 
     return ` ORDER BY "${field}" ${direction}`;

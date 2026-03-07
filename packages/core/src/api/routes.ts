@@ -1,6 +1,6 @@
 import { extname as nodeExtname } from 'node:path';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import type { NormalizedConfig, AuthConfig } from '../config/types.js';
+import type { NormalizedConfig, AuthConfig, WebhookConfig } from '../config/types.js';
 import type { HooksMap } from './hooks.js';
 import type { AccessMap } from './access.js';
 import type { StorageDriver } from '../storage/driver.js';
@@ -39,7 +39,8 @@ export async function registerRoutes(
   access?: AccessMap,
   auth?: AuthConfig,
   storage?: StorageDriver,
-  ctx?: AppContext
+  ctx?: AppContext,
+  webhooks?: WebhookConfig[]
 ): Promise<void> {
   // Health check endpoint
   app.get('/api/_health', async () => {
@@ -118,6 +119,7 @@ export async function registerRoutes(
       hooks: hooks?.[collection.name],
       access: effectiveAccess,
       ctx,
+      webhooks,
     };
 
     app.get(basePath, createListHandler(collection, config, handlerOpts));

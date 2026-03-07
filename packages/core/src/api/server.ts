@@ -6,7 +6,7 @@ import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
-import type { NormalizedConfig, AuthConfig } from '../config/types.js';
+import type { NormalizedConfig, AuthConfig, WebhookConfig } from '../config/types.js';
 import type { HooksMap } from './hooks.js';
 import type { AccessMap } from './access.js';
 import type { StorageDriver } from '../storage/driver.js';
@@ -23,6 +23,7 @@ export interface ServerOptions {
   auth?: AuthConfig;
   storage?: StorageDriver;
   ctx?: AppContext;
+  webhooks?: WebhookConfig[];
   cors?: {
     origin?: string | string[] | boolean;
   };
@@ -121,7 +122,7 @@ export async function createServer(
     app.log.warn('No auth configured — all API endpoints are publicly accessible. Set auth.adminSecret or auth.secret to protect your data.');
   }
 
-  await registerRoutes(app, config, options.hooks, options.access, effectiveAuth, options.storage, options.ctx);
+  await registerRoutes(app, config, options.hooks, options.access, effectiveAuth, options.storage, options.ctx, options.webhooks);
 
   return app;
 }

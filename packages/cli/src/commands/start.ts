@@ -58,6 +58,7 @@ export async function start(options: StartOptions = {}): Promise<void> {
     hooks,
     access,
     auth: rawConfig.auth,
+    webhooks: rawConfig.webhooks,
     ctx,
   });
   await startServer(app, { port });
