@@ -58,7 +58,8 @@ function signJwt(payload: Record<string, unknown>, secret: string, expiresInSec 
 
 function getSessionSecret(authConfig: AuthConfig): string {
   if (authConfig.secret) return authConfig.secret;
-  return createHmac('sha256', authConfig.adminSecret!).update('infernocms-session').digest('hex');
+  if (!authConfig.adminSecret) return '';
+  return createHmac('sha256', authConfig.adminSecret).update('infernocms-session').digest('hex');
 }
 
 export function registerAuth(

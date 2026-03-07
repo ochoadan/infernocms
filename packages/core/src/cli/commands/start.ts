@@ -11,7 +11,7 @@ import {
   extractHooks,
   extractAccess,
   AppContext,
-} from 'infernocms';
+} from '../../index.js';
 
 export interface StartOptions {
   port?: number;
