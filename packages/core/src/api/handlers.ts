@@ -1,7 +1,8 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import type { NormalizedCollectionConfig, NormalizedConfig, CollectionHooks, CollectionAccess } from '../config/types.js';
+import type { NormalizedCollectionConfig, NormalizedConfig, CollectionHooks, CollectionAccess, WebhookConfig } from '../config/types.js';
 import type { AppContext } from '../context.js';
 import { createContentService } from '../services/content-service.js';
+import { dispatchWebhooks } from '../webhooks.js';
 import { parseFilterParams } from './filters.js';
 import { checkAccess } from './access.js';
 import { formatResponse, formatPaginatedResponse, formatError } from './response.js';
@@ -31,6 +32,7 @@ export interface HandlerOptions {
   hooks?: CollectionHooks;
   access?: CollectionAccess;
   ctx?: AppContext;
+  webhooks?: WebhookConfig[];
 }
 
 export function createListHandler(
@@ -147,6 +149,10 @@ export function createCreateHandler(
       return formatError(result.error, 'VALIDATION_ERROR', result.validationErrors);
     }
 
+    if (options?.webhooks?.length) {
+      dispatchWebhooks(options.webhooks, 'create', collection.name, result.item);
+    }
+
     reply.status(201);
     return formatResponse(result.item!);
   };
@@ -197,6 +203,10 @@ export function createUpdateHandler(
       return formatError('Not found', 'NOT_FOUND');
     }
 
+    if (options?.webhooks?.length) {
+      dispatchWebhooks(options.webhooks, 'update', collection.name, result.item);
+    }
+
     return formatResponse(result.item);
   };
 }
@@ -243,6 +253,10 @@ export function createDeleteHandler(
     if (!result.deleted) {
       reply.status(404);
       return formatError('Not found', 'NOT_FOUND');
+    }
+
+    if (options?.webhooks?.length) {
+      dispatchWebhooks(options.webhooks, 'delete', collection.name, { id });
     }
 
     reply.status(204);

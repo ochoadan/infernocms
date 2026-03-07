@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { NormalizedConfig, NormalizedFieldConfig } from '../config/types.js';
+import type { NormalizedConfig, NormalizedFieldConfig, NormalizedTimestampsConfig } from '../config/types.js';
 import type { DbClient } from './client.js';
 import { getDb } from './connection.js';
 import { diffSchema, type ColumnInfo, type TableInfo, type MigrationOp } from './schema-diff.js';
@@ -72,7 +72,8 @@ function buildColumnDefinition(
 
 function buildCreateTableSQL(
   tableName: string,
-  fields: Record<string, NormalizedFieldConfig>
+  fields: Record<string, NormalizedFieldConfig>,
+  timestamps: NormalizedTimestampsConfig
 ): string {
   const columns = [
     'id SERIAL PRIMARY KEY',
@@ -81,10 +82,14 @@ function buildCreateTableSQL(
       .map(([name, field]) => buildColumnDefinition(name, field)),
   ];
 
-  columns.push(
-    '"createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
-    '"updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
-  );
+  if (timestamps.createdAt.enabled) {
+    const notNull = timestamps.createdAt.required ? ' NOT NULL' : '';
+    columns.push(`"createdAt" TIMESTAMP${notNull} DEFAULT CURRENT_TIMESTAMP`);
+  }
+  if (timestamps.updatedAt.enabled) {
+    const notNull = timestamps.updatedAt.required ? ' NOT NULL' : '';
+    columns.push(`"updatedAt" TIMESTAMP${notNull} DEFAULT CURRENT_TIMESTAMP`);
+  }
 
   return `CREATE TABLE IF NOT EXISTS "${tableName}" (\n  ${columns.join(',\n  ')}\n);`;
 }
@@ -105,13 +110,16 @@ function buildJunctionTableSQL(
 
 function buildIndexStatements(
   tableName: string,
-  fields: Record<string, NormalizedFieldConfig>
+  fields: Record<string, NormalizedFieldConfig>,
+  timestamps: NormalizedTimestampsConfig
 ): string[] {
   const statements: string[] = [];
 
-  statements.push(
-    `CREATE INDEX IF NOT EXISTS "idx_${tableName}_createdAt" ON "${tableName}" ("createdAt");`
-  );
+  if (timestamps.createdAt.enabled) {
+    statements.push(
+      `CREATE INDEX IF NOT EXISTS "idx_${tableName}_createdAt" ON "${tableName}" ("createdAt");`
+    );
+  }
 
   for (const [fieldName, fieldConfig] of Object.entries(fields)) {
     if (fieldConfig.type === 'relation' && !fieldConfig.many) {
@@ -405,7 +413,7 @@ async function executeSafeOps(
     if (op.type === 'CreateTable') {
       const collection = config.collections[op.table];
       if (collection) {
-        const sql = buildCreateTableSQL(op.table, collection.fields);
+        const sql = buildCreateTableSQL(op.table, collection.fields, collection.timestamps);
         await db.exec(sql);
       }
     }

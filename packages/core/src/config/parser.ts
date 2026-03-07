@@ -5,9 +5,11 @@ import type {
   NormalizedCollectionConfig,
   NormalizedFieldConfig,
   NormalizedBlockConfig,
+  NormalizedTimestampsConfig,
   FieldType,
   CollectionConfig,
   BlockDefinition,
+  TimestampsConfig,
 } from './types.js';
 
 const VALID_FIELD_TYPES: FieldType[] = [
@@ -39,13 +41,13 @@ function parseShorthand(shorthand: string): NormalizedFieldConfig {
     const rest = clean.slice(4);
     const many = rest.endsWith('[]');
     const collection = many ? rest.slice(0, -2) : rest;
-    return { type: 'relation', required, collection, many };
+    return { type: 'relation', required, silent: false, collection, many };
   }
 
   // slug:title (generate from field)
   if (clean.startsWith('slug:')) {
     const from = clean.slice(5);
-    return { type: 'slug', required, from };
+    return { type: 'slug', required, silent: false, from };
   }
 
   // select:draft,published (options list)
@@ -63,7 +65,7 @@ function parseShorthand(shorthand: string): NormalizedFieldConfig {
         );
       }
     }
-    return { type: 'select', required, options };
+    return { type: 'select', required, silent: false, options };
   }
 
   const type = clean as FieldType;
@@ -72,7 +74,7 @@ function parseShorthand(shorthand: string): NormalizedFieldConfig {
     throw new Error(`Invalid field type in shorthand: "${shorthand}"`);
   }
 
-  return { type, required };
+  return { type, required, silent: false };
 }
 
 function normalizeField(
@@ -92,6 +94,7 @@ function normalizeField(
   const normalized: NormalizedFieldConfig = {
     type: definition.type,
     required: definition.required ?? false,
+    silent: definition.silent ?? false,
   };
 
   if (definition.default !== undefined) {
@@ -149,24 +152,63 @@ function normalizeBlock(
   return { name, fields };
 }
 
-const RESERVED_FIELD_NAMES = new Set(['id', 'createdAt', 'updatedAt']);
+function normalizeTimestamps(
+  timestamps: TimestampsConfig | false | undefined
+): NormalizedTimestampsConfig {
+  if (timestamps === false) {
+    return {
+      createdAt: { enabled: false, required: false },
+      updatedAt: { enabled: false, required: false },
+    };
+  }
+
+  if (timestamps === undefined) {
+    return {
+      createdAt: { enabled: true, required: false },
+      updatedAt: { enabled: true, required: false },
+    };
+  }
+
+  return {
+    createdAt: {
+      enabled: true,
+      required: timestamps.createdAt?.required ?? false,
+    },
+    updatedAt: {
+      enabled: true,
+      required: timestamps.updatedAt?.required ?? false,
+    },
+  };
+}
+
+function getReservedFieldNames(
+  timestamps: NormalizedTimestampsConfig
+): Set<string> {
+  const reserved = new Set(['id']);
+  if (timestamps.createdAt.enabled) reserved.add('createdAt');
+  if (timestamps.updatedAt.enabled) reserved.add('updatedAt');
+  return reserved;
+}
 
 function normalizeCollection(
   name: string,
   collection: CollectionConfig
 ): NormalizedCollectionConfig {
+  const timestamps = normalizeTimestamps(collection.timestamps);
+  const reservedNames = getReservedFieldNames(timestamps);
   const fields: Record<string, NormalizedFieldConfig> = {};
 
   for (const [fieldName, definition] of Object.entries(collection.fields)) {
-    if (RESERVED_FIELD_NAMES.has(fieldName)) {
+    if (reservedNames.has(fieldName)) {
+      const reservedList = Array.from(reservedNames).join(', ');
       throw new Error(
-        `Field "${fieldName}" in collection "${name}" is reserved. System fields (id, createdAt, updatedAt) are added automatically.`
+        `Field "${fieldName}" in collection "${name}" is reserved. System fields (${reservedList}) are added automatically.`
       );
     }
     fields[fieldName] = normalizeField(fieldName, definition);
   }
 
-  return { name, fields };
+  return { name, fields, timestamps };
 }
 
 export function parseConfig(config: InfernoCMSConfig): NormalizedConfig {

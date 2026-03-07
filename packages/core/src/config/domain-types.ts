@@ -21,6 +21,7 @@ export interface BaseFieldConfig {
   type: FieldType;
   required?: boolean;
   default?: unknown;
+  silent?: boolean;
 }
 
 export interface TextFieldConfig extends BaseFieldConfig {
@@ -135,10 +136,20 @@ export type FieldConfig =
 
 export type FieldDefinition = FieldConfig | string;
 
+export interface TimestampFieldOptions {
+  required?: boolean;
+}
+
+export interface TimestampsConfig {
+  createdAt?: TimestampFieldOptions;
+  updatedAt?: TimestampFieldOptions;
+}
+
 export interface CollectionConfig {
   fields: Record<string, FieldDefinition>;
   hooks?: import('./hooks-types.js').CollectionHooks;
   access?: import('./hooks-types.js').CollectionAccess;
+  timestamps?: TimestampsConfig | false;
 }
 
 export interface BlockDefinition {
@@ -153,6 +164,7 @@ export interface NormalizedBlockConfig {
 export interface NormalizedFieldConfig {
   type: FieldType;
   required: boolean;
+  silent: boolean;
   default?: unknown;
   options?: string[];
   integer?: boolean;
@@ -164,9 +176,15 @@ export interface NormalizedFieldConfig {
   fields?: Record<string, NormalizedFieldConfig>;
 }
 
+export interface NormalizedTimestampsConfig {
+  createdAt: { enabled: boolean; required: boolean };
+  updatedAt: { enabled: boolean; required: boolean };
+}
+
 export interface NormalizedCollectionConfig {
   name: string;
   fields: Record<string, NormalizedFieldConfig>;
+  timestamps: NormalizedTimestampsConfig;
 }
 
 export interface NormalizedConfig {
@@ -175,9 +193,17 @@ export interface NormalizedConfig {
   storage?: import('./storage-types.js').StorageConfig;
 }
 
+export interface WebhookConfig {
+  url: string;
+  collections?: string[];
+  events?: ('create' | 'update' | 'delete')[];
+  secret?: string;
+}
+
 export interface InfernoCMSConfig {
   collections: Record<string, CollectionConfig>;
   blocks?: Record<string, BlockDefinition>;
   storage?: import('./storage-types.js').StorageConfig;
   auth?: import('./auth-types.js').AuthConfig;
+  webhooks?: WebhookConfig[];
 }

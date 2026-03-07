@@ -1,4 +1,4 @@
-import type { NormalizedConfig } from '../config/types.js';
+import type { NormalizedConfig, NormalizedCollectionConfig } from '../config/types.js';
 import { pgInfoSchemaType, pgDdlType } from './field-types.js';
 
 export interface ColumnInfo {
@@ -22,8 +22,12 @@ export type MigrationOp =
   | { type: 'CreateJunctionTable'; table: string; destructive: false }
   | { type: 'DropTable'; table: string; destructive: true };
 
-// System columns managed by the framework, not user-defined
-const SYSTEM_COLUMNS = new Set(['id', 'createdAt', 'updatedAt']);
+function getSystemColumns(collection: NormalizedCollectionConfig): Set<string> {
+  const cols = new Set(['id']);
+  if (collection.timestamps.createdAt.enabled) cols.add('createdAt');
+  if (collection.timestamps.updatedAt.enabled) cols.add('updatedAt');
+  return cols;
+}
 
 export function diffSchema(
   actual: Map<string, TableInfo>,
@@ -50,12 +54,14 @@ export function diffSchema(
         }
       }
       // Indexes for new table
-      ops.push({
-        type: 'CreateIndex',
-        table: tableName,
-        sql: `CREATE INDEX IF NOT EXISTS "idx_${tableName}_createdAt" ON "${tableName}" ("createdAt");`,
-        destructive: false,
-      });
+      if (collection.timestamps.createdAt.enabled) {
+        ops.push({
+          type: 'CreateIndex',
+          table: tableName,
+          sql: `CREATE INDEX IF NOT EXISTS "idx_${tableName}_createdAt" ON "${tableName}" ("createdAt");`,
+          destructive: false,
+        });
+      }
       for (const [fieldName, fieldConfig] of Object.entries(collection.fields)) {
         if (fieldConfig.type === 'relation' && !fieldConfig.many) {
           ops.push({
@@ -186,8 +192,9 @@ export function diffSchema(
     }
 
     // Find columns to drop (exist in DB but not in config)
+    const systemColumns = getSystemColumns(collection);
     for (const [colName] of tableInfo.columns) {
-      if (SYSTEM_COLUMNS.has(colName)) continue;
+      if (systemColumns.has(colName)) continue;
       if (desiredColumns.has(colName)) continue;
       ops.push({
         type: 'DropColumn',

@@ -65,6 +65,7 @@ export async function dev(options: DevOptions = {}): Promise<void> {
     hooks: extractHooks(rawConfig),
     access: extractAccess(rawConfig),
     auth: rawConfig.auth,
+    webhooks: rawConfig.webhooks,
     ctx,
   });
   await startServer(app, { port });
@@ -128,6 +129,7 @@ export async function dev(options: DevOptions = {}): Promise<void> {
           hooks: extractHooks(newRawConfig),
           access: extractAccess(newRawConfig),
           auth: newRawConfig.auth,
+          webhooks: newRawConfig.webhooks,
           ctx,
         });
         await startServer(app, { port });

@@ -39,6 +39,10 @@ export type {
   AccessRule,
   ItemAccessRule,
   AuthConfig,
+  WebhookConfig,
+  TimestampFieldOptions,
+  TimestampsConfig,
+  NormalizedTimestampsConfig,
 } from './config/types.js';
 
 // Config loading
@@ -80,6 +84,9 @@ export {
 export { type ParsedFilter } from './api/filters.js';
 export { extractHooks, type HooksMap } from './api/hooks.js';
 export { extractAccess, checkAccess, type AccessMap } from './api/access.js';
+
+// Webhooks
+export { dispatchWebhooks, type WebhookEvent, type WebhookPayload } from './webhooks.js';
 
 // Services
 export {

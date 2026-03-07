@@ -29,6 +29,10 @@ export type {
   NormalizedCollectionConfig,
   NormalizedConfig,
   InfernoCMSConfig,
+  WebhookConfig,
+  TimestampFieldOptions,
+  TimestampsConfig,
+  NormalizedTimestampsConfig,
 } from './domain-types.js';
 
 export type { AuthConfig } from './auth-types.js';
