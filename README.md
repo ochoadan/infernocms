@@ -94,27 +94,51 @@ export default defineConfig({
 
 ## Field types
 
-| Type | Storage | Options |
-|------|---------|---------|
-| `text` | `TEXT` | `required`, `maxLength`, `default` |
-| `textarea` | `TEXT` | `required`, `maxLength`, `default` |
-| `number` | `INTEGER`/`REAL` | `required`, `integer`, `default` |
-| `boolean` | `BOOLEAN` | `required`, `default` |
-| `select` | `TEXT` | `required`, `options[]`, `default` |
-| `datetime` | `TIMESTAMP` | `required`, `default` |
-| `date` | `DATE` | `required`, `default` |
-| `json` | `JSONB` | `required`, `default` |
-| `richtext` | `JSONB` | `required` |
-| `image` | `TEXT` (path/url) | `required`, `default` |
-| `file` | `TEXT` (path/url) | `required`, `default` |
-| `relation` | `INTEGER` (FK) | `required`, `collection`, `many` |
-| `slug` | `TEXT UNIQUE` | `required`, `from`, `default` |
-| `blocks` | `JSONB` | `required`, `allowed[]` |
-| `link` | `JSONB` | `required` |
-| `group` | `JSONB` | `required`, `fields` |
-| `array` | `JSONB` | `required`, `fields` |
+| Type | Options |
+|------|---------|
+| `text` | `required`, `maxLength`, `default` |
+| `textarea` | `required`, `maxLength`, `default` |
+| `number` | `required`, `integer`, `default` |
+| `boolean` | `required`, `default` |
+| `select` | `required`, `options[]`, `default` |
+| `datetime` | `required`, `default` |
+| `date` | `required`, `default` |
+| `json` | `required`, `default` |
+| `richtext` | `required` |
+| `image` | `required`, `default` |
+| `file` | `required`, `default` |
+| `relation` | `required`, `collection`, `many` |
+| `slug` | `required`, `from`, `default` |
+| `blocks` | `required`, `allowed[]` |
+| `link` | `required` |
+| `group` | `required`, `fields` |
+| `array` | `required`, `fields` |
 
-All fields also accept `silent: true` to hide from the admin form.
+All fields also accept `silent: true` to hide from the admin form (still readable and writable via API).
+
+Slugs auto-generate from the `from` field on create and update when blank. Explicit values are slugified as-is.
+
+`link` expects `{ url, label?, target? }` where `target` is `"_self"` (default) or `"_blank"`.
+
+`group` and `array` define nested fields:
+
+```typescript
+// group: single nested object
+metadata: field.group({
+  fields: {
+    source: field.text(),
+    campaign: field.text(),
+  }
+})
+
+// array: list of nested objects
+links: field.array({
+  fields: {
+    label: field.text({ required: true }),
+    url: field.text({ required: true }),
+  }
+})
+```
 
 Every collection automatically gets `id` (auto-increment integer), `createdAt`, and `updatedAt` columns. Disable timestamps with `timestamps: false` on the collection.
 
@@ -128,8 +152,8 @@ Every collection gets these endpoints:
 GET    /api/{collection}          # List items
 GET    /api/{collection}/:id      # Get single item
 POST   /api/{collection}          # Create item
-PUT    /api/{collection}/:id      # Full update
-PATCH  /api/{collection}/:id      # Partial update
+PUT    /api/{collection}/:id      # Full update (enforces required fields)
+PATCH  /api/{collection}/:id      # Partial update (skips required field validation)
 DELETE /api/{collection}/:id      # Delete item
 ```
 
@@ -137,19 +161,23 @@ System endpoints:
 
 ```
 GET    /api/_health               # Health check
-GET    /api/_schema               # Schema introspection (used by admin UI)
+GET    /api/_schema               # Schema introspection (requires auth if configured)
 POST   /api/_upload               # File upload (multipart, 10MB limit)
+POST   /api/_auth/login           # Admin login (returns session cookie)
+POST   /api/_auth/logout          # Clear session cookie
 ```
+
+Upload expects a `file` multipart field. Accepted extensions: `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.avif`, `.pdf`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.csv`, `.txt`, `.mp4`, `.webm`, `.mp3`, `.wav`, `.ogg`, `.zip`, `.json`. Returns `{ "data": { "url": "...", "filename": "...", "ext": "..." } }`.
 
 ### Query parameters
 
 ```
-?limit=10&offset=0               # Pagination (offset-based)
+?limit=10&offset=0               # Pagination (default 10, max 100)
 ?page=2&perPage=10               # Pagination (page-based)
 ?sort=createdAt                  # Sort ascending
 ?sort=-createdAt                 # Sort descending (prefix -)
 ?fields=id,title,slug            # Field selection
-?depth=1                         # Resolve relations (max 2)
+?depth=1                         # Resolve relations (max depth 2)
 ?search=hello                    # Search across text/textarea fields
 ```
 
@@ -157,20 +185,20 @@ POST   /api/_upload               # File upload (multipart, 10MB limit)
 
 Filters use query parameters with `_{operator}` suffix:
 
-| Operator | Example | SQL |
-|----------|---------|-----|
-| `eq` (default) | `?status=published` | `= 'published'` |
-| `ne` | `?status_ne=draft` | `!= 'draft'` |
-| `gt` | `?price_gt=10` | `> 10` |
-| `gte` | `?price_gte=10` | `>= 10` |
-| `lt` | `?price_lt=100` | `< 100` |
-| `lte` | `?price_lte=100` | `<= 100` |
-| `contains` | `?title_contains=hello` | `ILIKE '%hello%'` |
-| `startsWith` | `?title_startsWith=Hello` | `ILIKE 'Hello%'` |
-| `endsWith` | `?title_endsWith=world` | `ILIKE '%world'` |
-| `in` | `?status_in=draft,published` | `IN ('draft','published')` |
+| Operator | Example |
+|----------|---------|
+| `eq` (default) | `?status=published` |
+| `ne` | `?status_ne=draft` |
+| `gt` | `?price_gt=10` |
+| `gte` | `?price_gte=10` |
+| `lt` | `?price_lt=100` |
+| `lte` | `?price_lte=100` |
+| `contains` | `?title_contains=hello` |
+| `startsWith` | `?title_startsWith=Hello` |
+| `endsWith` | `?title_endsWith=world` |
+| `in` | `?status_in=draft,published` |
 
-Multiple filters are combined with AND.
+`contains`, `startsWith`, and `endsWith` are case-insensitive. Multiple filters are combined with AND.
 
 ### Response format
 
@@ -263,9 +291,9 @@ export default defineConfig({
 });
 ```
 
-### Stored format
+### API format
 
-Blocks are stored as a JSONB array:
+Blocks are returned as an array:
 
 ```json
 [
@@ -300,7 +328,16 @@ export default defineConfig({
 });
 ```
 
-When auth is configured, write operations (create/update/delete) require authentication by default. Read operations remain public unless explicitly restricted with access rules.
+When auth is configured, the default access policy is:
+
+| Operation | Default | Override with |
+|-----------|---------|---------------|
+| Read | Public | `access.read` |
+| Create | Any authenticated user | `access.create` |
+| Update | Any authenticated user | `access.update` |
+| Delete | Admin only (`_isAdmin: true`) | `access.delete` |
+
+The built-in admin login and `X-Admin-Key` header both set `_isAdmin: true`. If you sign your own JWTs with `secret`, include `_isAdmin: true` in the payload for delete access — or define explicit `access.delete` rules.
 
 ### Auth methods
 
@@ -310,7 +347,7 @@ When auth is configured, write operations (create/update/delete) require authent
 | Bearer JWT | `Authorization: Bearer {token}` | App users (sign tokens with `secret`) |
 | Session cookie | `infernocms-session` (httpOnly) | Admin UI login |
 
-The admin UI authenticates via `POST /api/_auth/login` with `{ "key": "{adminSecret}" }`, which sets an httpOnly session cookie.
+The admin UI authenticates via `POST /api/_auth/login` with `{ "key": "{adminSecret}" }`, which sets an httpOnly session cookie. Log out with `POST /api/_auth/logout`. The login endpoint is rate-limited to 10 requests per 15 minutes.
 
 ### Access control
 
@@ -333,7 +370,7 @@ export default defineConfig({
 });
 ```
 
-Access rules receive `{ user }` for read/create and `{ user, item }` for update/delete. Rules can be `boolean`, sync functions, or async functions.
+Access rules receive `{ user }` for read/create and `{ user, item }` for update/delete. `user` is the decoded JWT payload, or `{ role: 'admin', _isAdmin: true }` for admin key and session auth. Rules can be `boolean`, sync functions, or async functions.
 
 ## Hooks
 
@@ -368,6 +405,8 @@ export default defineConfig({
   }
 });
 ```
+
+`before*` hooks can return modified data (or nothing to leave data unchanged). Only `beforeDelete` can return `false` to cancel the operation.
 
 ## Webhooks
 
@@ -415,13 +454,6 @@ Webhooks are fire-and-forget with a 10-second timeout. Failed deliveries are log
 ## Admin UI
 
 Auto-generated from the schema. No configuration needed.
-
-### What it generates
-
-- **Sidebar** — one entry per collection
-- **List views** — sortable table with pagination, edit/delete actions
-- **Create/edit forms** — fields auto-mapped to UI components (text inputs, toggles, date pickers, relation selectors, rich text editor via Plate, block editor, etc.)
-- **Dashboard** — collection cards with quick actions
 
 ### Routes
 
@@ -532,6 +564,8 @@ CLI options: `--port`, `--config`, `--dry-run`
 
 ### Storage config
 
+Uploads use local storage by default. To use S3 (or R2/MinIO):
+
 ```typescript
 export default defineConfig({
   storage: {
@@ -555,8 +589,7 @@ export default defineConfig({
 ```
 infernocms/
 ├── packages/
-│   ├── core/           # Schema parser, database, API server, validation
-│   ├── cli/            # CLI commands (dev, start, generate)
+│   ├── core/           # Schema parser, database, API server, CLI, validation
 │   └── admin/          # Admin UI (Next.js 15)
 ```
 
@@ -581,9 +614,6 @@ your-project/
 | Database (dev) | PGlite (embedded PostgreSQL) |
 | Database (prod) | PostgreSQL |
 | Database access | Raw SQL (no ORM) |
-| Config loader | jiti |
-| CLI | cac |
 | Admin | Next.js 15 + shadcn/ui |
 | Rich text | Plate |
 | File storage | Local filesystem / S3-compatible |
-| Monorepo | pnpm workspaces |

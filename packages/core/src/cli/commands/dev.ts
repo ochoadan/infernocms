@@ -14,7 +14,7 @@ import {
   extractHooks,
   extractAccess,
   AppContext,
-} from 'infernocms';
+} from '../../index.js';
 import { generateTypes } from './generate-types.js';
 
 export interface DevOptions {

@@ -6,7 +6,7 @@ import {
   type NormalizedConfig,
   type NormalizedFieldConfig,
   type NormalizedBlockConfig,
-} from 'infernocms';
+} from '../../index.js';
 
 export interface GenerateTypesOptions {
   config?: string;

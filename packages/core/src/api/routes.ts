@@ -106,12 +106,13 @@ export async function registerRoutes(
     // When auth is configured, default write ops to require authentication.
     // Explicit user-defined rules always win via ?? fallback.
     // Read access stays open (CMS content is typically public).
+    // Delete defaults to admin-only (_isAdmin flag set by admin key / session login).
     const effectiveAccess = auth
       ? {
           read: collectionAccess?.read,
           create: collectionAccess?.create ?? (({ user }: { user?: Record<string, unknown> }) => !!user),
           update: collectionAccess?.update ?? (({ user }: { user?: Record<string, unknown> }) => !!user),
-          delete: collectionAccess?.delete ?? (({ user }: { user?: Record<string, unknown> }) => !!user),
+          delete: collectionAccess?.delete ?? (({ user }: { user?: Record<string, unknown> }) => !!(user as Record<string, unknown> | undefined)?._isAdmin),
         }
       : collectionAccess;
 
