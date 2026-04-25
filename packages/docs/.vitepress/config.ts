@@ -18,6 +18,8 @@ export default defineConfig({
           { text: 'Collections', link: '/guide/collections' },
           { text: 'Status Fields', link: '/guide/draft-published' },
           { text: 'Hooks', link: '/guide/hooks' },
+          { text: 'Webhooks', link: '/guide/webhooks' },
+          { text: 'Storage', link: '/guide/storage' },
           { text: 'Access Control', link: '/guide/access-control' },
         ],
       },
@@ -56,7 +58,7 @@ export default defineConfig({
       },
     ],
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/infernocms/infernocms' },
+      { icon: 'github', link: 'https://github.com/ochoadan/infernocms' },
     ],
   },
 });

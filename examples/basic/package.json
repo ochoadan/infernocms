@@ -6,7 +6,6 @@
     "dev": "infernocms dev"
   },
   "dependencies": {
-    "infernocms": "workspace:*",
-    "@infernocms/cli": "workspace:*"
+    "infernocms": "workspace:*"
   }
 }

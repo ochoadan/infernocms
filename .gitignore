@@ -3,6 +3,7 @@ node_modules/
 dist/
 
 .infernocms/
+examples/*/uploads/
 *.log
 *.tsbuildinfo
 .DS_Store
