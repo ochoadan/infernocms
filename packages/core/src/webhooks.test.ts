@@ -114,4 +114,35 @@ describe('dispatchWebhooks', () => {
     const [, opts] = mockFetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(opts.signal).toBeInstanceOf(AbortSignal);
   });
+
+  it('includes meta on status_change events', () => {
+    dispatchWebhooks(
+      [baseHook],
+      'status_change',
+      'posts',
+      { id: 1, title: 'Hi', status: 'published' },
+      { field: 'status', from: 'pending_review', to: 'published' }
+    );
+
+    const [, opts] = mockFetch.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(opts.body as string);
+    expect(body.event).toBe('status_change');
+    expect(body.meta).toEqual({ field: 'status', from: 'pending_review', to: 'published' });
+  });
+
+  it('respects events filter for status_change subscribers', () => {
+    const hook: WebhookConfig = {
+      url: 'https://example.com/hook',
+      events: ['status_change'],
+    };
+    dispatchWebhooks([hook], 'update', 'posts', { id: 1 });
+    expect(mockFetch).not.toHaveBeenCalled();
+
+    dispatchWebhooks([hook], 'status_change', 'posts', { id: 1 }, {
+      field: 'status',
+      from: 'draft',
+      to: 'pending_review',
+    });
+    expect(mockFetch).toHaveBeenCalledOnce();
+  });
 });

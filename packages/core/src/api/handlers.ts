@@ -176,18 +176,30 @@ export function createUpdateHandler(
       return formatError('Invalid ID format');
     }
 
-    // Access check needs the existing item, so we peek first
+    // Access check needs the existing item, so we peek first.
+    // We also retain `existingItem` for status-change detection below so
+    // we don't have to fetch twice.
+    let existingItem: Record<string, unknown> | null = null;
     if (options?.access?.update !== undefined) {
       const user = (request as unknown as Record<string, unknown>).user as Record<string, unknown> | undefined;
-      const existing = await service.get(id);
-      if (!existing) {
+      existingItem = (await service.get(id)) as Record<string, unknown> | null;
+      if (!existingItem) {
         reply.status(404);
         return formatError('Not found', 'NOT_FOUND');
       }
-      const allowed = await checkAccess(options.access.update, { user, item: existing });
+      const allowed = await checkAccess(options.access.update, { user, item: existingItem });
       if (!allowed) {
         reply.status(403);
         return formatError('Access denied', 'FORBIDDEN');
+      }
+    } else if (options?.webhooks?.length) {
+      // Even without access checks, fetch existing if any subscriber wants
+      // status_change events — otherwise we can't detect the transition.
+      const wantsStatusChange = options.webhooks.some(
+        (h) => !h.events || h.events.includes('status_change')
+      );
+      if (wantsStatusChange) {
+        existingItem = (await service.get(id)) as Record<string, unknown> | null;
       }
     }
 
@@ -205,6 +217,20 @@ export function createUpdateHandler(
 
     if (options?.webhooks?.length) {
       dispatchWebhooks(options.webhooks, 'update', collection.name, result.item);
+
+      // If a `status` field exists and its value changed, also fire
+      // status_change so subscribers can react to lifecycle transitions
+      // (e.g., draft → pending_review → published) without diffing updates.
+      const updated = result.item as Record<string, unknown>;
+      const before = existingItem?.status;
+      const after = updated.status;
+      if (existingItem && before !== after && (before !== undefined || after !== undefined)) {
+        dispatchWebhooks(options.webhooks, 'status_change', collection.name, result.item, {
+          field: 'status',
+          from: before,
+          to: after,
+        });
+      }
     }
 
     return formatResponse(result.item);

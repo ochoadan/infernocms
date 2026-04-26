@@ -196,7 +196,7 @@ export interface NormalizedConfig {
 export interface WebhookConfig {
   url: string;
   collections?: string[];
-  events?: ('create' | 'update' | 'delete')[];
+  events?: ('create' | 'update' | 'delete' | 'status_change')[];
   secret?: string;
 }
 
