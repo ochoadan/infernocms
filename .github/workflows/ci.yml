@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build core
+        run: pnpm --filter infernocms build
+
+      - name: Build admin
+        run: pnpm --filter @infernocms/admin build
+
+      - name: Test core
+        run: pnpm --filter infernocms test
+
+      - name: Verify core dist contains no test files
+        run: |
+          if find packages/core/dist -name "*.test.*" | grep -q .; then
+            echo "ERROR: Test files leaked into published dist"
+            find packages/core/dist -name "*.test.*"
+            exit 1
+          fi
+
+      - name: Verify npm pack succeeds
+        working-directory: packages/core
+        run: npm pack --dry-run

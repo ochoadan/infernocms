@@ -1,6 +1,8 @@
 # InfernoCMS
 
-A CMS that gets out of your way — define content in code, get an API and admin UI instantly.
+A headless CMS that gets out of your way — define content in code, get a REST API instantly.
+
+> **0.1.0** ships the API + schema engine. The admin UI is a preview available in the [monorepo](https://github.com/ochoadan/infernocms); a published npm admin package is targeted for `0.2.0`. The core API is stable.
 
 ## Quick start
 
@@ -453,22 +455,19 @@ Webhooks are fire-and-forget with a 10-second timeout. Failed deliveries are log
 
 ## Admin UI
 
-Auto-generated from the schema. No configuration needed.
+> **0.1.0 status:** preview. The admin UI is functional and auto-generated from your schema, but it is **not bundled** with the npm package in this release. When you `npm install infernocms` and run `npx infernocms dev`, only the API starts. The CLI prints a notice explaining how to run the admin from the [monorepo](https://github.com/ochoadan/infernocms). A published admin package is targeted for `0.2.0`.
 
-### Routes
+### Routes (when running)
 
 ```
-/admin                             # Dashboard
-/admin/collections/:name           # List view
-/admin/collections/:name/new       # Create form
-/admin/collections/:name/:id       # Edit form
-/admin/settings                    # Settings
+/                                  # Dashboard
+/collections/:name                 # List view
+/collections/:name/new             # Create form
+/collections/:name/:id             # Edit form
+/settings                          # Settings
 ```
 
-### Ports
-
-- Dev: API on port 4000, Admin on port 4001 (launched together by `npx infernocms dev`)
-- Production: Admin built as static assets, served by the API server or deployed separately
+The admin reads `/api/_schema` from the API and renders forms dynamically — no per-collection configuration needed.
 
 ## Type generation
 
@@ -545,7 +544,7 @@ npx infernocms dev
 - Local file storage in `./uploads/`
 - Hot reload on config changes
 - Types auto-generated on startup
-- API at `localhost:4000`, Admin at `localhost:4001`
+- API at `localhost:4000` (admin preview at `localhost:4001` only when running from the monorepo — see [Admin UI](#admin-ui) above)
 
 CLI options: `--port`, `--admin-port`, `--config`, `--no-admin`, `--dry-run`
 

@@ -1,0 +1,90 @@
+# InfernoCMS
+
+> A headless CMS for Node.js: define content schemas in TypeScript, get a REST API instantly. PGlite for dev, PostgreSQL for prod, S3-compatible storage, hooks, webhooks, and per-collection access control.
+
+InfernoCMS is a single npm package (`infernocms`) that turns a `content.config.ts` file into a working REST API — no migrations, no scaffolding, no codegen step. Releases follow semver; `0.1.0` ships the API and schema engine. The admin UI is a preview that runs from the [monorepo](https://github.com/ochoadan/infernocms); a published admin package is targeted for `0.2.0`.
+
+The fastest way to understand the surface is to read the schema introspection endpoint of any running instance: `GET /api/_schema` returns the full set of collections, fields, and shared blocks as JSON.
+
+## Quick start
+
+```bash
+npm install infernocms
+```
+
+```ts
+// content.config.ts
+import { defineConfig, field } from 'infernocms';
+
+export default defineConfig({
+  collections: {
+    posts: {
+      fields: {
+        title: field.text({ required: true }),
+        slug: field.slug({ from: 'title' }),
+        body: field.richtext(),
+        author: field.relation({ collection: 'authors' }),
+        status: field.select({ options: ['draft', 'published'], default: 'draft' }),
+      },
+    },
+    authors: {
+      fields: {
+        name: field.text({ required: true }),
+        bio: field.textarea(),
+      },
+    },
+  },
+});
+```
+
+```bash
+npx infernocms dev
+# API: http://localhost:4000
+```
+
+## Getting started
+
+- [Getting Started](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/getting-started.md): install, write a config, run the dev server, hit the API.
+- [Configuration](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/configuration.md): top-level config keys (`collections`, `blocks`, `storage`, `webhooks`, `auth`).
+- [Collections](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/collections.md): defining collections, fields, timestamps, and shorthand syntax.
+
+## Field types (17 total)
+
+- [Field types overview](https://github.com/ochoadan/infernocms/blob/main/packages/docs/fields/overview.md): all 17 types, shorthand syntax, common options.
+- Scalar: [text](https://github.com/ochoadan/infernocms/blob/main/packages/docs/fields/text.md), [number](https://github.com/ochoadan/infernocms/blob/main/packages/docs/fields/number.md), [boolean](https://github.com/ochoadan/infernocms/blob/main/packages/docs/fields/boolean.md), [select](https://github.com/ochoadan/infernocms/blob/main/packages/docs/fields/select.md), [datetime](https://github.com/ochoadan/infernocms/blob/main/packages/docs/fields/datetime.md), [slug](https://github.com/ochoadan/infernocms/blob/main/packages/docs/fields/slug.md).
+- Rich content: [richtext](https://github.com/ochoadan/infernocms/blob/main/packages/docs/fields/richtext.md) (Plate-based, stored as JSONB), [blocks](https://github.com/ochoadan/infernocms/blob/main/packages/docs/fields/blocks.md) (typed flexible content), [link](https://github.com/ochoadan/infernocms/blob/main/packages/docs/fields/link.md).
+- Relationships: [relation](https://github.com/ochoadan/infernocms/blob/main/packages/docs/fields/relation.md) (single + many-to-many).
+- Files: [image and file](https://github.com/ochoadan/infernocms/blob/main/packages/docs/fields/image-file.md).
+- Composite: [group](https://github.com/ochoadan/infernocms/blob/main/packages/docs/fields/group.md), [array](https://github.com/ochoadan/infernocms/blob/main/packages/docs/fields/array.md).
+
+## REST API
+
+- [Endpoints](https://github.com/ochoadan/infernocms/blob/main/packages/docs/api/endpoints.md): full endpoint list, including `/api/_schema`, `/api/_health`, `/api/_upload`, and per-collection CRUD.
+- [Query parameters](https://github.com/ochoadan/infernocms/blob/main/packages/docs/api/query-parameters.md): pagination (`page`, `perPage`), sorting, field selection (`fields`), depth (`depth`), filtering.
+- [Filtering](https://github.com/ochoadan/infernocms/blob/main/packages/docs/api/filtering.md): operators and search syntax.
+- [Response format](https://github.com/ochoadan/infernocms/blob/main/packages/docs/api/response-format.md): standardized `{ data, meta }` envelope and error shape.
+
+## Lifecycle and integrations
+
+- [Hooks](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/hooks.md): `beforeCreate`, `afterCreate`, `beforeUpdate`, `afterUpdate`, `beforeDelete`, `afterDelete`. Async-aware.
+- [Webhooks](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/webhooks.md): outbound HTTP delivery on CRUD events with optional HMAC signing.
+- [Access control](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/access-control.md): per-collection, per-operation rules with optional JWT auth.
+- [Draft / published workflow](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/draft-published.md).
+
+## Storage and deployment
+
+- [Storage](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/storage.md): local and S3-compatible drivers (AWS S3, Cloudflare R2).
+- [Railway](https://github.com/ochoadan/infernocms/blob/main/packages/docs/deploy/railway.md), [Fly.io](https://github.com/ochoadan/infernocms/blob/main/packages/docs/deploy/fly-io.md), [Docker](https://github.com/ochoadan/infernocms/blob/main/packages/docs/deploy/docker.md).
+
+## Project meta
+
+- [Repository](https://github.com/ochoadan/infernocms)
+- [npm: infernocms](https://www.npmjs.com/package/infernocms)
+- [CHANGELOG](https://github.com/ochoadan/infernocms/blob/main/CHANGELOG.md): release notes.
+- [License](https://github.com/ochoadan/infernocms/blob/main/LICENSE): AGPL-3.0-only.
+
+## Optional
+
+- [Architecture](https://github.com/ochoadan/infernocms/blob/main/ARCHITECTURE.md): internal design notes (for contributors, not API users).
+- [Roadmap](https://github.com/ochoadan/infernocms/blob/main/ROADMAP.md): planned features and phase status.
+- [Vision](https://github.com/ochoadan/infernocms/blob/main/VISION.md): project philosophy.
