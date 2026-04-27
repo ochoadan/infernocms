@@ -2,6 +2,11 @@ node_modules/
 .next/
 dist/
 
+# packages/core/dist is intentionally tracked so GitHub consumers
+# (`github:ochoadan/infernocms`) can `import from 'infernocms'` without
+# having to build the package themselves.
+!packages/core/dist/
+
 .infernocms/
 examples/*/uploads/
 *.log

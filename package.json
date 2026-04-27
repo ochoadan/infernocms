@@ -1,9 +1,24 @@
 {
-  "name": "infernocms-monorepo",
+  "name": "infernocms",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "InfernoCMS monorepo — see packages/core for the published package",
+  "description": "InfernoCMS monorepo. Root re-exports the core package so GitHub consumers can `import from 'infernocms'`.",
   "license": "AGPL-3.0-only",
+  "main": "./packages/core/dist/index.js",
+  "types": "./packages/core/dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./packages/core/dist/index.d.ts",
+      "import": "./packages/core/dist/index.js",
+      "default": "./packages/core/dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "packages/core/dist",
+    "packages/core/package.json"
+  ],
   "scripts": {
     "dev": "pnpm --filter infernocms-basic-example dev",
     "build": "pnpm --filter infernocms build && pnpm --filter @infernocms/admin build",
