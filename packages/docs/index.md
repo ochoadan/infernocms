@@ -3,44 +3,60 @@ layout: home
 
 hero:
   name: InfernoCMS
-  text: Simple or Flexible? Pick Both.
-  tagline: Define your content schema in TypeScript. Get a full REST API, admin UI, and type safety — instantly.
+  text: Headless CMS, defined in code.
+  tagline: Define your content schema in TypeScript. Get a full REST API instantly. Admin UI in preview.
   actions:
     - theme: brand
       text: Get Started
       link: /guide/getting-started
     - theme: alt
       text: View on GitHub
-      link: https://github.com/infernocms/infernocms
+      link: https://github.com/ochoadan/infernocms
 
 features:
   - title: Config-Driven Schema
     details: Define collections and fields in a single TypeScript config file. No migrations to write.
-  - title: 18 Field Types
+  - title: 17 Field Types
     details: Text, number, boolean, select, datetime, relation, slug, image, file, rich text, blocks, link, group, array, and more.
-  - title: Full REST API
-    details: CRUD endpoints with pagination, sorting, filtering, depth-resolved relations, and field selection.
-  - title: Admin Dashboard
-    details: Beautiful Next.js admin UI with dynamic forms, rich text editing, and file uploads.
+  - title: REST API
+    details: Auto-generated CRUD endpoints with pagination, sorting, filtering, depth-resolved relations, and field selection.
+  - title: Hooks, Webhooks, Access Control
+    details: Lifecycle hooks for custom logic. Outbound webhooks on CRUD events. Per-collection, per-operation access rules.
   - title: Zero-Setup Dev Database
-    details: PGlite (embedded PostgreSQL) runs locally with no install. Same code works with full Postgres in production.
-  - title: Hooks & Access Control
-    details: Lifecycle hooks for custom logic. Per-collection, per-operation access rules with JWT auth.
+    details: PGlite (embedded PostgreSQL) runs locally with no install. Same code works with full Postgres in production via DATABASE_URL.
+  - title: Storage Drivers
+    details: Local filesystem for dev, S3-compatible (AWS S3, Cloudflare R2) for production.
 ---
 
-## How we compare
+## Status
 
-See why developers are switching to InfernoCMS from other headless CMS platforms.
+`0.1.0` ships the headless API + schema engine as a single npm package. The admin UI is a **preview** that runs in the [monorepo](https://github.com/ochoadan/infernocms); a published admin package is targeted for `0.2.0`.
 
-| Feature | InfernoCMS | Strapi | Payload | Contentful | WordPress | Ghost |
-|---------|-----------|--------|---------|------------|-----------|-------|
-| Setup time | 60 seconds | 10+ min | 10+ min | 5+ min | 5+ min | 2+ min |
-| Self-hostable | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
-| 100% free | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
-| TypeScript native | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| Simple REST API | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ |
-| Zero config dev | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Schema in code | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| No migrations | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ |
+```bash
+npm install infernocms
+```
 
-*Comparison based on default configurations and free tiers as of January 2026.*
+```ts
+// content.config.ts
+import { defineConfig, field } from 'infernocms';
+
+export default defineConfig({
+  collections: {
+    posts: {
+      fields: {
+        title: field.text({ required: true }),
+        slug: field.slug({ from: 'title' }),
+        body: field.richtext(),
+        author: field.relation({ collection: 'authors' }),
+        status: field.select({ options: ['draft', 'published'], default: 'draft' }),
+      },
+    },
+  },
+});
+```
+
+```bash
+npx infernocms dev
+```
+
+API at `http://localhost:4000/api/posts`. See [Getting Started](/guide/getting-started) for the full walkthrough.

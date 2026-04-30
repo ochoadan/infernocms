@@ -11,22 +11,41 @@ InfernoCMS provides a comprehensive REST API built on Fastify. All endpoints fol
 GET /api/_schema
 ```
 
-Returns the complete schema definition including all collections and their field configurations.
+Returns the parsed schema for all collections and shared blocks. Unlike CRUD endpoints, this endpoint does **not** wrap its response in a `data` envelope — it returns the schema object directly.
 
-**Response:**
+**Response shape:**
 ```json
 {
-  "data": {
-    "collections": [
-      {
-        "name": "posts",
-        "fields": [...],
-        ...
+  "blocks": {
+    "hero": {
+      "name": "hero",
+      "fields": {
+        "heading": { "type": "text", "required": true, "silent": false },
+        "subheading": { "type": "text", "required": false, "silent": false }
       }
-    ]
+    }
+  },
+  "collections": {
+    "posts": {
+      "name": "posts",
+      "fields": {
+        "title": { "type": "text", "required": true, "silent": false },
+        "slug": { "type": "slug", "from": "title", "required": false, "silent": false },
+        "author": { "type": "relation", "collection": "authors", "required": false, "silent": false }
+      }
+    }
   }
 }
 ```
+
+`collections` and `blocks` are objects keyed by name (not arrays). Each field's shape mirrors the parsed `NormalizedFieldConfig` and includes type-specific options (`maxLength`, `options`, `collection`, `many`, `from`, `allowed`, nested `fields`, etc.).
+
+#### Health Check
+```
+GET /api/_health
+```
+
+Returns `{ "status": "ok" }` when the server is running.
 
 ### File Upload
 

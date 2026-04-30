@@ -1,6 +1,6 @@
 # Field Types Overview
 
-InfernoCMS provides 18 built-in field types to handle various data structures. Fields can be defined using `field.xxx()` helpers or shorthand string notation.
+InfernoCMS provides 17 built-in field types to handle various data structures. Fields can be defined using `field.xxx()` helpers or shorthand string notation.
 
 ## All Field Types
 
