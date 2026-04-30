@@ -1,8 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
-  eslint: { ignoreDuringBuilds: true },
-  typescript: { ignoreBuildErrors: true },
   // Allow API calls to the core server
   async rewrites() {
     const apiUrl = process.env.INFERNOCMS_API_URL ?? 'http://localhost:4000';

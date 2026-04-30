@@ -1,6 +1,6 @@
 {
   "name": "infernocms",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "Headless CMS with flexible field types, REST API, and admin UI",
   "license": "AGPL-3.0-only",
   "type": "module",

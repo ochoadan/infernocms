@@ -88,8 +88,10 @@ export async function dev(options: DevOptions = {}): Promise<void> {
     if (adminProcess) {
       console.log(`Admin UI:   http://localhost:${adminPort}\n`);
     } else {
-      console.log('Admin UI:   Could not locate @infernocms/admin package');
-      console.log('            Run admin separately: cd packages/admin && pnpm dev\n');
+      console.log('Admin UI:   Not available — admin is preview-only in 0.1.0');
+      console.log('            For the admin preview, clone https://github.com/ochoadan/infernocms');
+      console.log('            and run `pnpm dev` from the monorepo root.');
+      console.log('            (Re-run with --no-admin to silence this message.)\n');
     }
   } else {
     console.log('\nAdmin UI:   Disabled (--no-admin)\n');
