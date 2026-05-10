@@ -145,7 +145,6 @@ export interface InfernoCMSConfig {
     collections: Record<string, CollectionConfig>;
     blocks?: Record<string, BlockDefinition>;
     storage?: import('./storage-types.js').StorageConfig;
-    auth?: import('./auth-types.js').AuthConfig;
     webhooks?: WebhookConfig[];
 }
 //# sourceMappingURL=domain-types.d.ts.map

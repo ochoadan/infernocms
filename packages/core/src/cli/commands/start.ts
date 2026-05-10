@@ -12,6 +12,8 @@ import {
   extractAccess,
   AppContext,
 } from '../../index.js';
+import { ensureSystemTables } from '../../auth/system-tables.js';
+import { runBootstrap } from '../../auth/bootstrap.js';
 
 export interface StartOptions {
   port?: number;
@@ -45,6 +47,12 @@ export async function start(options: StartOptions = {}): Promise<void> {
   console.log('Connecting to database...');
   const db = await createConnection({ databaseUrl });
 
+  console.log('Ensuring system tables...');
+  await ensureSystemTables(db);
+
+  console.log('Running bootstrap...');
+  await runBootstrap(db);
+
   console.log('Syncing tables...');
   await syncTables(config, { force: false, dryRun: options.dryRun, db });
 
@@ -57,8 +65,8 @@ export async function start(options: StartOptions = {}): Promise<void> {
     logger: true,
     hooks,
     access,
-    auth: rawConfig.auth,
     webhooks: rawConfig.webhooks,
+    db,
     ctx,
   });
   await startServer(app, { port });

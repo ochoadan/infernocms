@@ -8,7 +8,7 @@ import {
   File02Icon,
   Home01Icon,
   Settings01Icon,
-} from "@hugeicons/react";
+} from "@/lib/icons";
 import type { Schema } from "@/lib/api";
 
 interface SidebarProps {

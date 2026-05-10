@@ -1,6 +1,6 @@
 export { field } from './schema/fields.js';
 export { defineConfig } from './schema/define.js';
-export type { InfernoCMSConfig, CollectionConfig, FieldConfig, FieldDefinition, FieldType, TextFieldConfig, TextareaFieldConfig, NumberFieldConfig, BooleanFieldConfig, SelectFieldConfig, DatetimeFieldConfig, DateFieldConfig, JsonFieldConfig, RelationFieldConfig, SlugFieldConfig, ImageFieldConfig, FileFieldConfig, RichtextFieldConfig, BlocksFieldConfig, LinkFieldConfig, GroupFieldConfig, ArrayFieldConfig, BlockDefinition, NormalizedBlockConfig, StorageConfig, NormalizedConfig, NormalizedCollectionConfig, NormalizedFieldConfig, CollectionHooks, CollectionAccess, AccessContext, ItemAccessContext, AccessRule, ItemAccessRule, AuthConfig, WebhookConfig, TimestampFieldOptions, TimestampsConfig, NormalizedTimestampsConfig, } from './config/types.js';
+export type { InfernoCMSConfig, CollectionConfig, FieldConfig, FieldDefinition, FieldType, TextFieldConfig, TextareaFieldConfig, NumberFieldConfig, BooleanFieldConfig, SelectFieldConfig, DatetimeFieldConfig, DateFieldConfig, JsonFieldConfig, RelationFieldConfig, SlugFieldConfig, ImageFieldConfig, FileFieldConfig, RichtextFieldConfig, BlocksFieldConfig, LinkFieldConfig, GroupFieldConfig, ArrayFieldConfig, BlockDefinition, NormalizedBlockConfig, StorageConfig, NormalizedConfig, NormalizedCollectionConfig, NormalizedFieldConfig, CollectionHooks, CollectionAccess, AccessContext, ItemAccessContext, AccessRule, ItemAccessRule, WebhookConfig, TimestampFieldOptions, TimestampsConfig, NormalizedTimestampsConfig, } from './config/types.js';
 export { loadConfig } from './config/loader.js';
 export { parseConfig } from './config/parser.js';
 export { createConnection, getDb, closeConnection, type ConnectionOptions, } from './database/connection.js';
@@ -17,4 +17,7 @@ export { dispatchWebhooks, type WebhookEvent, type WebhookPayload } from './webh
 export { createContentService, validateData, type ContentService, type ListOptions, type ContentServiceOptions, type ValidationError, } from './services/content-service.js';
 export { initStorage, getStorage, type StorageDriver, } from './storage/index.js';
 export { AppContext } from './context.js';
+export { ensureSystemTables } from './auth/system-tables.js';
+export { runBootstrap, type BootstrapOptions } from './auth/bootstrap.js';
+export { generateToken, hashToken, mintToken, lookupToken, listTokens, revokeToken, adminTokenCount, TOKEN_PREFIX, type TokenScope, type TokenRecord, type MintedToken, } from './auth/tokens.js';
 //# sourceMappingURL=index.d.ts.map

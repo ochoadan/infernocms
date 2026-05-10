@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { fetchCollection, deleteItem, type PaginatedResponse } from "@/lib/api";
 import { useToast } from "@/components/ui/use-toast";
-import { Add01Icon, RefreshIcon } from "@hugeicons/react";
+import { Add01Icon, RefreshIcon } from "@/lib/icons";
 
 export default function CollectionPage() {
   const params = useParams();

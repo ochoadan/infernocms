@@ -8,6 +8,22 @@ While the project is pre-1.0, breaking changes may occur in minor releases (`0.x
 
 ## [Unreleased]
 
+### Added
+
+- **`@infernocms/next`** — Next.js extension package. Reads your `content.config.ts` and emits a typed client (`cms.posts.list()`, `cms.posts.bySlug()`, etc.). Includes a write-client factory (server-only, token-auth), a webhook revalidation route factory, a `<CmsImage>` component for CMS-served files, and a `withInfernoCMS()` Next config wrapper. Replaces the boilerplate every Next.js consumer of InfernoCMS used to rewrite. See [packages/next/README.md](packages/next/README.md).
+
+### Changed (breaking)
+
+- **Auth is now token-first.** A new `_infernocms_tokens` system table stores hashed bearer tokens with three scopes (`read` / `write` / `admin`). All authenticated requests use `Authorization: Bearer <token>`. The middleware always runs — the `auth` config knob is gone; public reads are still expressed via per-collection `access.read`.
+- **Bootstrap admin token** is set via `INFERNOCMS_BOOTSTRAP_TOKEN` env var (used by hosting platforms during provisioning) or generated on first start, printed to stdout, and appended to `.env` if present.
+- **Removed:** `auth.adminSecret`, `auth.secret`, the `AuthConfig` type, `x-admin-key` header, `/api/_auth/login`, `/api/_auth/logout`, the `infernocms-session` cookie, the externally-signed JWT bearer mode, the `@fastify/cookie` dependency.
+- **Added:** `GET /api/_auth/me`, `GET /api/_tokens`, `POST /api/_tokens`, `DELETE /api/_tokens/:id`. All admin-scoped except `/me`. Plaintext token returned exactly once on creation.
+- **`createServer` now requires `db`** in `ServerOptions`. The `auth` option was removed.
+
+Migration for existing `adminSecret` deployments: run once, capture the bootstrap token, replace `x-admin-key: <secret>` with `Authorization: Bearer <token>` in any pipeline calling the API.
+
+Design and rationale: [`docs/superpowers/specs/2026-05-08-cms-auth-design.md`](docs/superpowers/specs/2026-05-08-cms-auth-design.md).
+
 ## [0.1.0] — 2026-05-02
 
 First public release. Ships the headless CMS engine — schema, database, REST API — as a single npm package.

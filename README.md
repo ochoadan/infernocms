@@ -49,6 +49,29 @@ REST API at `http://localhost:4000/api/posts` — full schema introspection at `
 - **Webhooks** — outbound HTTP delivery on CRUD events with retry
 - **Access control** — per-collection read/create/update/delete rules
 - **Type generation** — auto-emits `.infernocms/types.ts` from your config
+- **Token-first auth** — bearer tokens with `read` / `write` / `admin` scopes, hashed at rest, revocable
+
+## Auth
+
+Every request authenticates with `Authorization: Bearer <token>`. Tokens live in `_infernocms_tokens` with three scopes (`read` / `write` / `admin`), are hashed at rest, and are revocable.
+
+On first start, an admin token is generated and printed to stdout (and appended to `.env` if present). Hosting platforms can pre-set it via `INFERNOCMS_BOOTSTRAP_TOKEN`.
+
+```bash
+# Verify your token
+curl http://localhost:4000/api/_auth/me \
+  -H "Authorization: Bearer $TOKEN"
+# → { "data": { "id": "...", "name": "bootstrap", "scope": "admin" } }
+
+# Mint a write-scoped token for a content pipeline
+curl -X POST http://localhost:4000/api/_tokens \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"content-pipeline","scope":"write"}'
+# → { "data": { "id": "...", "plaintext": "icms_..." } }   (shown once)
+```
+
+Public reads are still allowed by default — auth only gates writes and admin endpoints. Override per collection via `access.read`. Migration notes for `0.1.x` deployments using `auth.adminSecret` live in [CHANGELOG.md](CHANGELOG.md).
 
 ## Status
 
@@ -76,6 +99,7 @@ A VitePress docs site is also available under `packages/docs` (`pnpm --filter @i
 | Package | npm | Description |
 |---|---|---|
 | [`packages/core`](packages/core) | `infernocms` | Schema parser, database, REST API, CLI |
+| [`packages/next`](packages/next) | `@infernocms/next` | Next.js extension: typed client codegen, webhook revalidation, image handling |
 | [`packages/admin`](packages/admin) | _not published in 0.1.0_ | Admin UI (Next.js 15 + shadcn/ui) |
 | [`packages/docs`](packages/docs) | _internal_ | VitePress documentation site |
 

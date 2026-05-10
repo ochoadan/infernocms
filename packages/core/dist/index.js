@@ -23,4 +23,8 @@ export { createContentService, validateData, } from './services/content-service.
 export { initStorage, getStorage, } from './storage/index.js';
 // Context
 export { AppContext } from './context.js';
+// Auth (used by hosting platforms that bypass the CLI and call createServer directly)
+export { ensureSystemTables } from './auth/system-tables.js';
+export { runBootstrap } from './auth/bootstrap.js';
+export { generateToken, hashToken, mintToken, lookupToken, listTokens, revokeToken, adminTokenCount, TOKEN_PREFIX, } from './auth/tokens.js';
 //# sourceMappingURL=index.js.map

@@ -11,9 +11,11 @@ export default defineConfig({
   collections: { /* ... */ },
   blocks: { /* ... */ },
   storage: { /* ... */ },
-  auth: { /* ... */ },
+  webhooks: [ /* ... */ ],
 })
 ```
+
+> Auth is no longer a config option. Token-first auth is always on. See [Authentication](/guide/auth) for the bootstrap flow and how to mint additional tokens.
 
 ## Top-Level Options
 
@@ -107,38 +109,9 @@ storage: {
 }
 ```
 
-### `auth`
+### Authentication
 
-Configure authentication and authorization.
-
-#### `secret`
-
-JWT signing secret (HS256 algorithm). Required for user authentication:
-
-```typescript
-export default defineConfig({
-  auth: {
-    secret: process.env.JWT_SECRET,
-  },
-})
-```
-
-When set, clients can authenticate by sending a JWT in the `Authorization: Bearer <token>` header.
-
-#### `adminSecret`
-
-Admin bypass key for privileged access:
-
-```typescript
-export default defineConfig({
-  auth: {
-    secret: process.env.JWT_SECRET,
-    adminSecret: process.env.ADMIN_SECRET,
-  },
-})
-```
-
-Requests with `X-Admin-Key: <adminSecret>` header bypass all access control rules.
+Auth is not configured here — it's always on. Tokens are managed at runtime via the admin UI or the `/api/_tokens` endpoint, not in config. See [Authentication](/guide/auth).
 
 ### `database` (optional)
 
@@ -191,10 +164,6 @@ export default defineConfig({
     },
     publicUrl: process.env.CDN_URL,
     prefix: 'cms-uploads/',
-  },
-  auth: {
-    secret: process.env.JWT_SECRET,
-    adminSecret: process.env.ADMIN_SECRET,
   },
 })
 ```

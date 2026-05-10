@@ -38,7 +38,6 @@ export type {
   ItemAccessContext,
   AccessRule,
   ItemAccessRule,
-  AuthConfig,
   WebhookConfig,
   TimestampFieldOptions,
   TimestampsConfig,
@@ -107,3 +106,20 @@ export {
 
 // Context
 export { AppContext } from './context.js';
+
+// Auth (used by hosting platforms that bypass the CLI and call createServer directly)
+export { ensureSystemTables } from './auth/system-tables.js';
+export { runBootstrap, type BootstrapOptions } from './auth/bootstrap.js';
+export {
+  generateToken,
+  hashToken,
+  mintToken,
+  lookupToken,
+  listTokens,
+  revokeToken,
+  adminTokenCount,
+  TOKEN_PREFIX,
+  type TokenScope,
+  type TokenRecord,
+  type MintedToken,
+} from './auth/tokens.js';

@@ -7,7 +7,7 @@ import { DynamicForm } from "@/components/dynamic-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { fetchItem, updateItem } from "@/lib/api";
-import { ArrowLeft01Icon, Loading01Icon, Copy01Icon } from "@hugeicons/react";
+import { ArrowLeft01Icon, Loading01Icon, Copy01Icon } from "@/lib/icons";
 import { useToast } from "@/components/ui/use-toast";
 import Link from "next/link";
 

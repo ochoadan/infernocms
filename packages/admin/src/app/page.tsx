@@ -2,7 +2,7 @@
 
 import { useSchema } from "@/components/providers";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { File02Icon, Database02Icon } from "@hugeicons/react";
+import { File02Icon, Database02Icon } from "@/lib/icons";
 import Link from "next/link";
 
 export default function DashboardPage() {

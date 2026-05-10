@@ -19,7 +19,7 @@ import {
   ArrowUp01Icon,
   ArrowDown01Icon,
   Search01Icon,
-} from "@hugeicons/react";
+} from "@/lib/icons";
 import type { SchemaField } from "@/lib/api";
 
 interface DataTableProps {

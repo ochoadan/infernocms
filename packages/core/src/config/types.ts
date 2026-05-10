@@ -35,8 +35,6 @@ export type {
   NormalizedTimestampsConfig,
 } from './domain-types.js';
 
-export type { AuthConfig } from './auth-types.js';
-
 export type { StorageConfig } from './storage-types.js';
 
 export type {

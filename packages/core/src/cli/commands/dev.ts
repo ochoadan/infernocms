@@ -15,6 +15,8 @@ import {
   extractAccess,
   AppContext,
 } from '../../index.js';
+import { ensureSystemTables } from '../../auth/system-tables.js';
+import { runBootstrap } from '../../auth/bootstrap.js';
 import { generateTypes } from './generate-types.js';
 
 export interface DevOptions {
@@ -44,6 +46,12 @@ export async function dev(options: DevOptions = {}): Promise<void> {
   const dataDir = resolve(process.cwd(), '.infernocms/data');
   const db = await createConnection({ dataDir });
 
+  console.log('Ensuring system tables...');
+  await ensureSystemTables(db);
+
+  console.log('Running bootstrap...');
+  await runBootstrap(db);
+
   console.log('Syncing tables...');
   await syncTables(config, { force: true, dryRun: options.dryRun, db });
 
@@ -64,8 +72,8 @@ export async function dev(options: DevOptions = {}): Promise<void> {
     logger: false,
     hooks: extractHooks(rawConfig),
     access: extractAccess(rawConfig),
-    auth: rawConfig.auth,
     webhooks: rawConfig.webhooks,
+    db,
     ctx,
   });
   await startServer(app, { port });
@@ -130,8 +138,8 @@ export async function dev(options: DevOptions = {}): Promise<void> {
           logger: false,
           hooks: extractHooks(newRawConfig),
           access: extractAccess(newRawConfig),
-          auth: newRawConfig.auth,
           webhooks: newRawConfig.webhooks,
+          db,
           ctx,
         });
         await startServer(app, { port });

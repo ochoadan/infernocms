@@ -25,7 +25,7 @@ import {
   Delete01Icon,
   ArrowUp01Icon,
   ArrowDown01Icon,
-} from "@hugeicons/react";
+} from "@/lib/icons";
 import dynamic from "next/dynamic";
 
 const RichTextEditor = dynamic(

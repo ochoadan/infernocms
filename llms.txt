@@ -45,7 +45,7 @@ npx infernocms dev
 ## Getting started
 
 - [Getting Started](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/getting-started.md): install, write a config, run the dev server, hit the API.
-- [Configuration](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/configuration.md): top-level config keys (`collections`, `blocks`, `storage`, `webhooks`, `auth`).
+- [Configuration](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/configuration.md): top-level config keys (`collections`, `blocks`, `storage`, `webhooks`).
 - [Collections](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/collections.md): defining collections, fields, timestamps, and shorthand syntax.
 
 ## Field types (17 total)

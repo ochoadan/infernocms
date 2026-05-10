@@ -1,0 +1,66 @@
+{
+  "name": "@infernocms/next",
+  "version": "0.0.0",
+  "description": "Next.js extension for InfernoCMS — typed client codegen, webhook revalidation, image handling.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ochoadan/infernocms.git",
+    "directory": "packages/next"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "import": "./dist/runtime/index.js"
+    },
+    "./webhook": {
+      "types": "./dist/webhook/index.d.ts",
+      "import": "./dist/webhook/index.js"
+    },
+    "./config": {
+      "types": "./dist/config/index.d.ts",
+      "import": "./dist/config/index.js"
+    },
+    "./image": {
+      "types": "./dist/image/index.d.ts",
+      "import": "./dist/image/index.js"
+    }
+  },
+  "bin": {
+    "infernocms-next": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "infernocms": "workspace:*",
+    "next": ">=14",
+    "react": ">=18"
+  },
+  "dependencies": {
+    "cac": "^6.7.14"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^19.0.0",
+    "infernocms": "workspace:*",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "typescript": "^5.3.3",
+    "vitest": "^3.0.0"
+  }
+}

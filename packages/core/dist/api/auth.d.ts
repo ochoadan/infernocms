@@ -1,4 +1,4 @@
 import type { FastifyInstance } from 'fastify';
-import type { AuthConfig } from '../config/types.js';
-export declare function registerAuth(app: FastifyInstance, authConfig: AuthConfig): void;
+import type { DbClient } from '../database/client.js';
+export declare function registerAuthRoutes(app: FastifyInstance, db: DbClient): void;
 //# sourceMappingURL=auth.d.ts.map

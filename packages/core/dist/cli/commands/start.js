@@ -1,5 +1,7 @@
 import { resolve } from 'node:path';
 import { loadConfig, parseConfig, createConnection, syncTables, createServer, startServer, getEndpointList, initStorage, extractHooks, extractAccess, AppContext, } from '../../index.js';
+import { ensureSystemTables } from '../../auth/system-tables.js';
+import { runBootstrap } from '../../auth/bootstrap.js';
 export async function start(options = {}) {
     const port = options.port ?? (Number(process.env.PORT) || 4000);
     const configPath = resolve(process.cwd(), options.config ?? 'content.config.ts');
@@ -19,6 +21,10 @@ export async function start(options = {}) {
     }
     console.log('Connecting to database...');
     const db = await createConnection({ databaseUrl });
+    console.log('Ensuring system tables...');
+    await ensureSystemTables(db);
+    console.log('Running bootstrap...');
+    await runBootstrap(db);
     console.log('Syncing tables...');
     await syncTables(config, { force: false, dryRun: options.dryRun, db });
     const storage = config.storage ? await initStorage(config.storage) : undefined;
@@ -28,8 +34,8 @@ export async function start(options = {}) {
         logger: true,
         hooks,
         access,
-        auth: rawConfig.auth,
         webhooks: rawConfig.webhooks,
+        db,
         ctx,
     });
     await startServer(app, { port });

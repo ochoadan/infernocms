@@ -1,18 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useSchema } from "@/components/providers";
+import { useToken } from "@/components/providers/token-provider";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshIcon, Logout03Icon } from "@hugeicons/react";
-import { logout } from "@/lib/api";
+import { RefreshIcon, Logout03Icon } from "@/lib/icons";
 
 export default function SettingsPage() {
   const { schema, error, refresh } = useSchema();
-
-  const handleLogout = async () => {
-    await logout();
-    refresh();
-  };
+  const { user, logout } = useToken();
 
   return (
     <div className="p-8">
@@ -60,22 +57,32 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle>Session</CardTitle>
             <CardDescription>
-              Manage your admin session
+              Signed in with your bearer token
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center justify-between py-2">
-                <span className="text-sm text-muted-foreground">Status</span>
-                <span className="flex items-center gap-2">
-                  <span className={`h-2.5 w-2.5 rounded-full ${schema ? 'bg-green-500' : 'bg-muted'}`} />
-                  {schema ? 'Connected' : 'Not connected'}
-                </span>
+              {user && (
+                <>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-sm text-muted-foreground">Token name</span>
+                    <span className="font-medium">{user.name}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-sm text-muted-foreground">Scope</span>
+                    <span className="rounded-md bg-muted px-2 py-0.5 text-xs uppercase">{user.scope}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="outline">
+                  <Link href="/settings/tokens">Manage tokens</Link>
+                </Button>
+                <Button variant="outline" onClick={logout}>
+                  <Logout03Icon className="mr-2 h-4 w-4" />
+                  Sign out
+                </Button>
               </div>
-              <Button variant="outline" onClick={handleLogout}>
-                <Logout03Icon className="mr-2 h-4 w-4" />
-                Sign out
-              </Button>
             </div>
           </CardContent>
         </Card>

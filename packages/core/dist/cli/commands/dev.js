@@ -3,6 +3,8 @@ import { existsSync, statSync, watch } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { loadConfig, parseConfig, createConnection, syncTables, createServer, startServer, getEndpointList, initStorage, extractHooks, extractAccess, AppContext, } from '../../index.js';
+import { ensureSystemTables } from '../../auth/system-tables.js';
+import { runBootstrap } from '../../auth/bootstrap.js';
 import { generateTypes } from './generate-types.js';
 export async function dev(options = {}) {
     const port = options.port ?? 4000;
@@ -18,6 +20,10 @@ export async function dev(options = {}) {
     console.log('Initializing database...');
     const dataDir = resolve(process.cwd(), '.infernocms/data');
     const db = await createConnection({ dataDir });
+    console.log('Ensuring system tables...');
+    await ensureSystemTables(db);
+    console.log('Running bootstrap...');
+    await runBootstrap(db);
     console.log('Syncing tables...');
     await syncTables(config, { force: true, dryRun: options.dryRun, db });
     const storage = config.storage ? await initStorage(config.storage) : undefined;
@@ -35,8 +41,8 @@ export async function dev(options = {}) {
         logger: false,
         hooks: extractHooks(rawConfig),
         access: extractAccess(rawConfig),
-        auth: rawConfig.auth,
         webhooks: rawConfig.webhooks,
+        db,
         ctx,
     });
     await startServer(app, { port });
@@ -91,8 +97,8 @@ export async function dev(options = {}) {
                     logger: false,
                     hooks: extractHooks(newRawConfig),
                     access: extractAccess(newRawConfig),
-                    auth: newRawConfig.auth,
                     webhooks: newRawConfig.webhooks,
+                    db,
                     ctx,
                 });
                 await startServer(app, { port });

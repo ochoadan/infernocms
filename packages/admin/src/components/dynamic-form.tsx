@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import type { SchemaField, SchemaBlock } from "@/lib/api";
-import { FloppyDiskIcon, Loading01Icon } from "@hugeicons/react";
+import { FloppyDiskIcon, Loading01Icon } from "@/lib/icons";
 import { FieldInput } from "@/components/field-input";
 
 interface DynamicFormProps {

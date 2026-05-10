@@ -1,5 +1,7 @@
 # Architecture
 
+> ⚠️ The "Admin UI" sections below describe the current preview implementation. Sub-project 3 (admin rebuild on shadcn preset) will replace it. Other sections track current behavior.
+
 ## System overview
 
 ```
@@ -465,30 +467,13 @@ Blocks stored as JSON array:
 }
 ```
 
-## Authentication (optional)
+## Authentication
 
-Disabled by default. Enable with:
+Token-first bearer auth. Every request — admin UI, LLM pipeline, curl — sends `Authorization: Bearer <token>`. Tokens are first-class records in `_infernocms_tokens` with three scopes (`read` / `write` / `admin`), revocable from the admin UI, hashed at rest with `sha256`.
 
-```typescript
-// Option A: Local email/password auth
-export default defineConfig({
-  auth: {
-    enabled: true,
-    provider: 'local',  // email/password
-  },
-  // ...
-});
+The bootstrap admin token is set via the `INFERNOCMS_BOOTSTRAP_TOKEN` environment variable (used by Inferno Cloud during provisioning) or generated on first start, printed to stdout, and appended to `.env` if present.
 
-// Option B: OAuth providers
-export default defineConfig({
-  auth: {
-    enabled: true,
-    provider: 'oauth',
-    providers: ['google', 'github'],
-  },
-  // ...
-});
-```
+There is no "no auth" mode at the request layer — the middleware always runs. Public read access is expressed at the collection level via `access.read`. Full design: [auth spec](docs/superpowers/specs/2026-05-08-cms-auth-design.md).
 
 Access control per collection:
 
@@ -536,9 +521,9 @@ export default defineConfig({
 });
 ```
 
-## Type generation (planned)
+## Type generation
 
-Auto-generates TypeScript types:
+Auto-generates TypeScript types from the config (regenerated on every dev hot-reload):
 
 ```typescript
 // .infernocms/types.ts (auto-generated, do not edit)

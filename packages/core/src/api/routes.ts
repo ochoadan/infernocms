@@ -1,10 +1,12 @@
 import { extname as nodeExtname } from 'node:path';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import type { NormalizedConfig, AuthConfig, WebhookConfig } from '../config/types.js';
+import type { NormalizedConfig, WebhookConfig } from '../config/types.js';
 import type { HooksMap } from './hooks.js';
 import type { AccessMap } from './access.js';
 import type { StorageDriver } from '../storage/driver.js';
 import type { AppContext } from '../context.js';
+import type { DbClient } from '../database/client.js';
+import type { TokenScope } from '../auth/tokens.js';
 import {
   createListHandler,
   createGetHandler,
@@ -13,6 +15,7 @@ import {
   createDeleteHandler,
 } from './handlers.js';
 import { formatResponse, formatError } from './response.js';
+import { registerAuthRoutes } from './auth.js';
 import { getStorage } from '../storage/index.js';
 
 const ALLOWED_UPLOAD_EXTENSIONS = new Set([
@@ -25,8 +28,19 @@ const ALLOWED_UPLOAD_EXTENSIONS = new Set([
 function requireAuth(request: FastifyRequest, reply: FastifyReply): boolean {
   const user = (request as unknown as Record<string, unknown>).user;
   if (!user) {
+    reply.status(401);
+    reply.send(formatError('Authentication required', 'UNAUTHENTICATED'));
+    return false;
+  }
+  return true;
+}
+
+function requireAdmin(request: FastifyRequest, reply: FastifyReply): boolean {
+  const user = (request as unknown as Record<string, unknown>).user as
+    | { _isAdmin?: boolean } | undefined;
+  if (!user || !user._isAdmin) {
     reply.status(403);
-    reply.send(formatError('Authentication required', 'FORBIDDEN'));
+    reply.send(formatError('Admin scope required', 'FORBIDDEN'));
     return false;
   }
   return true;
@@ -35,35 +49,37 @@ function requireAuth(request: FastifyRequest, reply: FastifyReply): boolean {
 export async function registerRoutes(
   app: FastifyInstance,
   config: NormalizedConfig,
+  db: DbClient,
   hooks?: HooksMap,
   access?: AccessMap,
-  auth?: AuthConfig,
   storage?: StorageDriver,
   ctx?: AppContext,
   webhooks?: WebhookConfig[]
 ): Promise<void> {
-  // Health check endpoint
-  app.get('/api/_health', async () => {
-    return { status: 'ok' };
-  });
+  // Health check (public)
+  app.get('/api/_health', async () => ({ status: 'ok' }));
 
-  // Schema endpoint for admin UI
+  // Auth routes (token CRUD + /me)
+  registerAuthRoutes(app, db);
+
+  // Schema endpoint (admin only — schema reveals collection structure)
   app.get('/api/_schema', async (request, reply) => {
-    if (auth && !requireAuth(request, reply)) return;
-
+    if (!requireAdmin(request, reply)) return;
     const collections: Record<string, unknown> = {};
     for (const [name, col] of Object.entries(config.collections)) {
-      collections[name] = {
-        name: col.name,
-        fields: col.fields,
-      };
+      collections[name] = { name: col.name, fields: col.fields };
     }
-    return { blocks: config.blocks, collections };
+    return formatResponse({ blocks: config.blocks, collections });
   });
 
-  // File upload endpoint
+  // File upload (write or admin scope)
   app.post('/api/_upload', async (request, reply) => {
-    if (auth && !requireAuth(request, reply)) return;
+    if (!requireAuth(request, reply)) return;
+    const user = (request as unknown as Record<string, unknown>).user as { scope: TokenScope };
+    if (user.scope === 'read') {
+      reply.status(403);
+      return formatError('Write or admin scope required', 'FORBIDDEN');
+    }
 
     const file = await request.file();
     if (!file) {
@@ -80,17 +96,18 @@ export async function registerRoutes(
     let buffer: Buffer;
     try {
       buffer = await file.toBuffer();
-    } catch {
+    } catch (err) {
+      app.log.error({ err }, 'Failed to read uploaded file');
       reply.status(400);
       return formatError('Failed to read uploaded file');
     }
 
     const storageDriver = storage ?? ctx?.storage ?? getStorage();
-
     let url: string;
     try {
       url = await storageDriver.upload(file.filename, buffer, file.mimetype);
     } catch (err) {
+      app.log.error({ err }, 'Failed to store uploaded file');
       reply.status(500);
       return formatError('Failed to store uploaded file');
     }
@@ -98,31 +115,22 @@ export async function registerRoutes(
     return formatResponse({ url, filename: file.filename, ext });
   });
 
-  // Collection CRUD routes
+  // Collection CRUD with scope-based access defaults
   for (const collection of Object.values(config.collections)) {
     const basePath = `/api/${collection.name}`;
     const collectionAccess = access?.[collection.name];
 
-    // When auth is configured, default write ops to require authentication.
-    // Explicit user-defined rules always win via ?? fallback.
-    // Read access stays open (CMS content is typically public).
-    // Delete defaults to admin-only (_isAdmin flag set by admin key / session login).
-    const effectiveAccess = auth
-      ? {
-          read: collectionAccess?.read,
-          create: collectionAccess?.create ?? (({ user }: { user?: Record<string, unknown> }) => !!user),
-          update: collectionAccess?.update ?? (({ user }: { user?: Record<string, unknown> }) => !!user),
-          delete: collectionAccess?.delete ?? (({ user }: { user?: Record<string, unknown> }) => !!(user as Record<string, unknown> | undefined)?._isAdmin),
-        }
-      : collectionAccess;
-
-    const handlerOpts = {
-      hooks: hooks?.[collection.name],
-      access: effectiveAccess,
-      ctx,
-      webhooks,
+    const effectiveAccess = {
+      read: collectionAccess?.read,
+      create: collectionAccess?.create ?? (({ user }: { user?: { scope?: TokenScope } }) =>
+        !!user && (user.scope === 'write' || user.scope === 'admin')),
+      update: collectionAccess?.update ?? (({ user }: { user?: { scope?: TokenScope } }) =>
+        !!user && (user.scope === 'write' || user.scope === 'admin')),
+      delete: collectionAccess?.delete ?? (({ user }: { user?: { scope?: TokenScope } }) =>
+        user?.scope === 'admin'),
     };
 
+    const handlerOpts = { hooks: hooks?.[collection.name], access: effectiveAccess, ctx, webhooks };
     app.get(basePath, createListHandler(collection, config, handlerOpts));
     app.get(`${basePath}/:id`, createGetHandler(collection, config, handlerOpts));
     app.post(basePath, createCreateHandler(collection, config, handlerOpts));
@@ -135,10 +143,13 @@ export async function registerRoutes(
 export function getEndpointList(config: NormalizedConfig): string[] {
   const endpoints: string[] = [
     'GET    /api/_health',
+    'GET    /api/_auth/me',
+    'GET    /api/_tokens',
+    'POST   /api/_tokens',
+    'DELETE /api/_tokens/:id',
     'GET    /api/_schema',
     'POST   /api/_upload',
   ];
-
   for (const collection of Object.values(config.collections)) {
     const basePath = `/api/${collection.name}`;
     endpoints.push(
@@ -150,6 +161,5 @@ export function getEndpointList(config: NormalizedConfig): string[] {
       `DELETE ${basePath}/:id`
     );
   }
-
   return endpoints;
 }

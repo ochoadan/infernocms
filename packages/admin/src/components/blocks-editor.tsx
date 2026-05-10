@@ -10,7 +10,7 @@ import {
   Delete01Icon,
   ArrowUp01Icon,
   ArrowDown01Icon,
-} from "@hugeicons/react";
+} from "@/lib/icons";
 import type { SchemaBlock, SchemaField } from "@/lib/api";
 import { FieldInput } from "@/components/field-input";
 

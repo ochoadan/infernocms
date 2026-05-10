@@ -2,128 +2,71 @@
 
 ## One sentence
 
-A CMS that gets out of your way — define content in code, get an API and UI instantly.
+A code-first headless CMS designed to be driven primarily by LLMs and agentic content pipelines, with a clean admin UI for the humans who supervise them.
+
+## Who this is for
+
+**Primary: LLMs and agentic content pipelines.** Systems like MassContent and inferno-content generate, enrich, and publish content through the InfernoCMS API at machine pace. The API is the product surface they live in. Predictable shapes, explicit constraints, actionable error messages, and stable contracts are what "good UX" means here — not human ergonomics.
+
+**Secondary: Humans operating those pipelines.** Solo developers and small teams who configure schemas, supervise content output, and review what their pipelines produce. They live in `content.config.ts`, the admin UI, and the docs.
+
+**Tertiary: Humans hand-authoring content directly.** It works fine — the admin UI is a real CMS — but it's not the design center. If a feature has to choose between "easier for an LLM to produce correct output" and "fewer clicks for a human content editor," the LLM wins.
+
+**Not for:** Enterprise teams needing workflow approvals, audit logs, compliance, or visual page builders. We're not trying to serve everyone.
 
 ## The problem we solve
 
-Every CMS makes you choose: **simple but rigid** (Ghost, WordPress) or **flexible but complex** (Strapi, Payload, Contentful).
+Most CMSes were designed for human content editors clicking through admin panels. When an LLM tries to produce content for them, every layer fights back: opaque content shapes that aren't documented anywhere, validation errors that are written for humans to read, schemas that live in a database (not source control), brittle auth ceremonies, and APIs that assume a human is going to retry on failure.
 
-Developers waste hours on CMS setup, config, and fighting abstractions. Content teams wait for developers to make schema changes. Everyone loses.
+InfernoCMS inverts that. Schemas live in code. The API is REST with a stable envelope. Errors are structured. Auth is a single bearer-token mechanism. Schema introspection is a single endpoint. An LLM with a token can write to any endpoint without reading any docs — and produce correct output, repeatably, because the constraints are machine-checkable.
 
-## What we are
+## Core principles
 
-**A code-first content layer that expands with your application.**
+### 1. The API is the product
 
-You define content types in a simple config. The system generates:
-- REST API endpoints (instant, no setup)
-- Admin UI (forms auto-generated from schema)
-- TypeScript types (full type safety)
+REST endpoints, predictable shapes, no query languages, no SDKs required. Every collection gets the same five verbs. Every response has the same envelope. Every error has the same structure. An LLM doesn't need to learn InfernoCMS — it needs to use it, and a good API design means it can.
 
-When you add a field to your config, the system expands. No UI to click through. No deploy to trigger. Additive schema changes happen automatically — destructive changes (renaming, type changes) use explicit migrations so you never lose data by accident.
+### 2. Code is the source of truth for schema
 
-```typescript
-// content.config.ts — this is the entire setup for a blog
-import { defineConfig, field } from 'infernocms';
+Schemas live in `content.config.ts`, version-controlled, reviewable, deployable. The admin UI reflects code, not the other way around. There is no "click here to add a field" — that's an anti-pattern for systems where the schema needs to be predictable to upstream code generators.
 
-export default defineConfig({
-  collections: {
-    posts: {
-      fields: {
-        title: field.text({ required: true }),
-        body: field.richtext(),
-        cover: field.image(),
-        published: field.boolean(),
-      }
-    }
-  }
-});
-```
+### 3. Schema introspection is first-class
 
-Run `npx infernocms dev`. You now have `/api/posts` and an admin at `/admin`.
+`GET /api/_schema` returns the entire content model as machine-readable JSON: every collection, every field, every constraint. A pipeline pointed at an unknown InfernoCMS instance can discover its full surface in one request. Type generation is a downstream consumer of this same endpoint.
+
+### 4. Sensible defaults, escape hatches when needed
+
+Zero-config local dev (PGlite, local files, generated bootstrap admin token). Production swaps in PostgreSQL via `DATABASE_URL`, S3 via storage config, and a Cloud-provided bootstrap token. The opt-ins exist where they're needed; the defaults are correct.
+
+### 5. One auth mechanism for everything
+
+A bearer token. Same for the admin UI, same for an LLM pipeline, same for a curl smoke test. No cookies, no sessions, no OAuth dance, no separate "API key" concept living next to "user accounts." Three scopes (`read` / `write` / `admin`), revocable from the admin UI, generated on first run. See [auth design](docs/superpowers/specs/2026-05-08-cms-auth-design.md).
+
+### 6. Errors are written for the consumer that hits them
+
+Every error is a JSON object with `message` and `code`. Validation errors include the field that failed and why. An LLM reading a 400 response should be able to retry with corrected input on the next call without human intervention. A human reading the same response should also understand what went wrong, but the LLM is the test case.
 
 ## What we are NOT
 
 | We are NOT | Because |
-|------------|---------|
-| A page builder | We manage content, not layouts |
-| A full website solution | We're headless-first (with optional preview) |
-| An enterprise platform | Simple > feature-complete |
-| A database replacement | We're a content layer on top of your database |
-| A framework | We're a tool that plugs into any stack |
-
-## Core principles
-
-### 1. Zero to content in 60 seconds
-
-First-time experience matters more than advanced features. A developer should go from `npm install` to creating their first content item in under a minute.
-
-**Implication:** No mandatory config files, no required environment variables, no database setup for local dev. PGlite (embedded PostgreSQL) by default, same code works with full Postgres in production.
-
-### 2. Code is the source of truth
-
-Content schemas live in your codebase, version-controlled, reviewable, deployable. The UI reflects code, not the other way around.
-
-**Implication:** No clicking through admin panels to define fields. No exporting/importing schemas. Change code → system adapts.
-
-### 3. The API is the product
-
-Everything else (admin UI, types, validation) exists to serve the API. The API should be so simple that any developer (or AI agent) can use it without reading docs.
-
-**Implication:**
-- `GET /api/posts` — list posts
-- `GET /api/posts/:id` — get one post
-- `POST /api/posts` — create post
-- `PUT /api/posts/:id` — update post
-- `DELETE /api/posts/:id` — delete post
-
-That's it. No query languages. No special syntax. Just REST.
-
-### 4. Sensible defaults, escape hatches when needed
-
-Works perfectly with zero config. But when you need customization, it's there — not hidden behind enterprise tiers.
-
-**Implication:**
-- Default: PGlite (embedded Postgres), local file storage, no auth
-- Opt-in: Full Postgres, S3/R2, JWT auth, webhooks
-
-### 5. AI-friendly by design
-
-LLMs and AI agents are first-class consumers. The simple, predictable REST API is trivially callable by any AI system — no SDKs, no auth ceremony, no query language to learn.
-
-**Implication:**
-- Simple, predictable endpoints
-- Clear error messages
-- Consistent response format across all collections
-
-## Who this is for
-
-**Primary: Solo developers and small teams** who need content management without the overhead. Building a SaaS? Need a blog, changelog, docs, or help center? This handles it.
-
-**Secondary: Agencies** spinning up client sites. One config file, deploy, hand off the admin to the client.
-
-**Tertiary: AI developers** building apps that need structured content storage with simple API access.
-
-## Who this is NOT for
-
-- Enterprise teams needing workflow approvals, audit logs, compliance
-- Marketing teams wanting visual page builders
-- Anyone needing real-time collaboration (Google Docs style)
-
-We're not trying to serve everyone. We're trying to be the best for our core users.
+|---|---|
+| A page builder | We manage content; layout belongs to the consuming app. |
+| A visual editing tool | The admin UI is for supervision, not for hand-authoring at scale. |
+| A "low-code" platform | We are a code-first content layer. The schema is code. |
+| An identity provider | We auth into the CMS itself. Consuming apps handle their own end-user auth. |
+| A framework | We plug into any stack via REST. |
+| An enterprise platform | Simple > feature-complete. |
 
 ## Success metrics
 
-1. **Time to first content item**: < 60 seconds
-2. **Lines of config for a blog**: < 20
-3. **API response time**: < 50ms p95
-4. **Learning curve**: Use it correctly on first try without reading docs
-
-## The name
-
-**InfernoCMS** — fast, fiery, gets out of your way.
+1. **An LLM can produce correct content on first call** given only `/api/_schema` and a bearer token.
+2. **Time to first content item** for a human: under 60 seconds from `npm install` to a created row.
+3. **Lines of config for a blog**: under 20.
+4. **API response time**: under 50 ms p95 on a single-CPU instance.
+5. **Validation error → corrected retry** is mechanical, not heuristic.
 
 ## North star
 
-**Ghost's simplicity. Payload's flexibility. Zero learning curve.**
+When a content pipeline's author asks "what backend should I point this at?", we want the answer to be obvious: "Use InfernoCMS. Define your collections, hand the agent a write-scoped token, point it at `/api/_schema`. It'll figure out the rest."
 
-When someone asks "what CMS should I use for my project?", we want the answer to be obvious: "Just use InfernoCMS. It takes 5 minutes."
+The same answer works for a human asking "what should I use for my blog or marketing site?" — they get the admin UI as the supervision layer over the same primitives.

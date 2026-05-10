@@ -2,17 +2,17 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
-import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
-import type { NormalizedConfig, AuthConfig, WebhookConfig } from '../config/types.js';
+import type { NormalizedConfig, WebhookConfig } from '../config/types.js';
 import type { HooksMap } from './hooks.js';
 import type { AccessMap } from './access.js';
 import type { StorageDriver } from '../storage/driver.js';
 import type { AppContext } from '../context.js';
+import type { DbClient } from '../database/client.js';
 import { registerRoutes } from './routes.js';
-import { registerAuth } from './auth.js';
+import { registerAuthMiddleware } from '../auth/middleware.js';
 
 export interface ServerOptions {
   port?: number;
@@ -20,34 +20,26 @@ export interface ServerOptions {
   logger?: boolean;
   hooks?: HooksMap;
   access?: AccessMap;
-  auth?: AuthConfig;
   storage?: StorageDriver;
   ctx?: AppContext;
   webhooks?: WebhookConfig[];
-  cors?: {
-    origin?: string | string[] | boolean;
-  };
-  rateLimit?: {
-    max?: number;
-    timeWindow?: string;
-  };
+  db: DbClient;
+  cors?: { origin?: string | string[] | boolean };
+  rateLimit?: { max?: number; timeWindow?: string };
 }
 
 export async function createServer(
   config: NormalizedConfig,
-  options: ServerOptions = {}
+  options: ServerOptions
 ): Promise<FastifyInstance> {
-  const { logger = true } = options;
+  const { logger = true, db } = options;
 
   const app = Fastify({
     logger: logger
       ? {
           transport: {
             target: 'pino-pretty',
-            options: {
-              translateTime: 'HH:MM:ss Z',
-              ignore: 'pid,hostname',
-            },
+            options: { translateTime: 'HH:MM:ss Z', ignore: 'pid,hostname' },
           },
         }
       : false,
@@ -62,18 +54,13 @@ export async function createServer(
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   });
 
-  // Enable CORS for admin UI — restrict origin in production
-  const corsOrigin = options.cors?.origin ?? (process.env.NODE_ENV === 'production' ? false : true);
-  if (corsOrigin === true && process.env.NODE_ENV === 'production') {
-    app.log.warn('CORS origin is set to allow all origins in production. Set cors.origin to restrict access.');
-  }
+  // CORS — bearer auth means we don't need credentials, so this is simpler.
+  // Default allow-all; tokens are not ambient credentials. Operators can lock
+  // down via cors.origin if they want.
   await app.register(cors, {
-    origin: corsOrigin,
-    credentials: corsOrigin !== true,
+    origin: options.cors?.origin ?? true,
+    credentials: false,
   });
-
-  // Cookie parsing (needed for session auth)
-  await app.register(cookie);
 
   // Rate limiting
   await app.register(rateLimit, {
@@ -81,57 +68,50 @@ export async function createServer(
     timeWindow: options.rateLimit?.timeWindow ?? '1 minute',
   });
 
-  // Multipart for file uploads (10MB limit)
-  await app.register(multipart, {
-    limits: {
-      fileSize: 10 * 1024 * 1024,
-    },
-  });
+  // Multipart for file uploads (10MB)
+  await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
 
-  // Serve uploaded files with security headers (only for local storage)
+  // Local storage static serving
   if (!config.storage?.provider || config.storage.provider === 'local') {
     const uploadsDir = join(process.cwd(), 'uploads');
-    if (!existsSync(uploadsDir)) {
-      mkdirSync(uploadsDir, { recursive: true });
-    }
+    if (!existsSync(uploadsDir)) mkdirSync(uploadsDir, { recursive: true });
     const safeInlineExts = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif']);
     await app.register(fastifyStatic, {
       root: uploadsDir,
       prefix: '/uploads/',
       setHeaders: (res, filePath) => {
         res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; media-src 'self'");
+        res.setHeader(
+          'Content-Security-Policy',
+          "default-src 'none'; style-src 'unsafe-inline'; media-src 'self'"
+        );
         const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
-        if (!safeInlineExts.has(ext)) {
-          res.setHeader('Content-Disposition', 'attachment');
-        }
+        if (!safeInlineExts.has(ext)) res.setHeader('Content-Disposition', 'attachment');
       },
     });
   }
 
-  // Register auth middleware if configured
-  let effectiveAuth: AuthConfig | undefined = options.auth;
-  if (effectiveAuth) {
-    if (!effectiveAuth.secret && !effectiveAuth.adminSecret) {
-      app.log.warn('Auth config provided but neither secret nor adminSecret is set — treating as no auth. Writes will be publicly accessible.');
-      effectiveAuth = undefined;
-    } else {
-      registerAuth(app, effectiveAuth);
-    }
-  } else {
-    app.log.warn('No auth configured — all API endpoints are publicly accessible. Set auth.adminSecret or auth.secret to protect your data.');
-  }
+  // Auth middleware always on (token-first model)
+  registerAuthMiddleware(app, db);
 
-  await registerRoutes(app, config, options.hooks, options.access, effectiveAuth, options.storage, options.ctx, options.webhooks);
+  await registerRoutes(
+    app,
+    config,
+    db,
+    options.hooks,
+    options.access,
+    options.storage,
+    options.ctx,
+    options.webhooks
+  );
 
   return app;
 }
 
 export async function startServer(
   app: FastifyInstance,
-  options: ServerOptions = {}
+  options: { port?: number; host?: string } = {}
 ): Promise<void> {
   const { port = 4000, host = '0.0.0.0' } = options;
-
   await app.listen({ port, host });
 }
