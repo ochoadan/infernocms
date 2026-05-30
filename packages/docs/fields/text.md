@@ -81,6 +81,5 @@ export default {
 ## Usage Notes
 
 - Both `text` and `textarea` are stored identically in the database as `TEXT`
-- The difference is only in the admin UI (single-line vs multi-line input)
 - For rich text editing with formatting, use the `richtext` field instead
 - Text fields have no maximum length by default (database-dependent)

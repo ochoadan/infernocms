@@ -10,16 +10,12 @@ cli
   .command('dev', 'Start development server')
   .option('-p, --port <port>', 'Port to listen on', { default: 4000 })
   .option('-c, --config <path>', 'Path to config file', { default: 'content.config.ts' })
-  .option('--no-admin', 'Skip launching admin UI')
-  .option('--admin-port <port>', 'Admin UI port', { default: 4001 })
   .option('--dry-run', 'Log planned migration operations without executing')
   .action(async (options) => {
     try {
       await dev({
         port: typeof options.port === 'string' ? parseInt(options.port, 10) : options.port,
         config: options.config,
-        admin: options.admin,
-        adminPort: typeof options.adminPort === 'string' ? parseInt(options.adminPort, 10) : options.adminPort,
         dryRun: options.dryRun,
       });
     } catch (error) {

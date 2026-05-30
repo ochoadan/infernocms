@@ -2,7 +2,7 @@
 
 > A headless CMS for Node.js: define content schemas in TypeScript, get a REST API instantly. PGlite for dev, PostgreSQL for prod, S3-compatible storage, hooks, webhooks, and per-collection access control.
 
-InfernoCMS is a single npm package (`infernocms`) that turns a `content.config.ts` file into a working REST API — no migrations, no scaffolding, no codegen step. Releases follow semver; `0.1.0` ships the API and schema engine. The admin UI is a preview that runs from the [monorepo](https://github.com/ochoadan/infernocms); a published admin package is targeted for `0.2.0`.
+InfernoCMS is a single npm package (`infernocms`) that turns a `content.config.ts` file into a working REST API — no migrations, no scaffolding, no codegen step. It is headless and code-first: you operate it through the REST API, the CLI, and the `@infernocms/next` package. Releases follow semver; `0.1.0` ships the API and schema engine.
 
 The fastest way to understand the surface is to read the schema introspection endpoint of any running instance: `GET /api/_schema` returns the full set of collections, fields, and shared blocks as JSON.
 
@@ -68,7 +68,7 @@ npx infernocms dev
 
 - [Hooks](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/hooks.md): `beforeCreate`, `afterCreate`, `beforeUpdate`, `afterUpdate`, `beforeDelete`, `afterDelete`. Async-aware.
 - [Webhooks](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/webhooks.md): outbound HTTP delivery on CRUD events with optional HMAC signing.
-- [Access control](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/access-control.md): per-collection, per-operation rules with optional JWT auth.
+- [Access control](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/access-control.md): per-collection, per-operation rules over token-first bearer auth.
 - [Draft / published workflow](https://github.com/ochoadan/infernocms/blob/main/packages/docs/guide/draft-published.md).
 
 ## Storage and deployment

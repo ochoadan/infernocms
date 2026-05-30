@@ -1,6 +1,6 @@
 # Boolean Field
 
-Boolean field for storing true/false values, rendered as a checkbox in the admin UI.
+Boolean field for storing true/false values.
 
 **Database Type:** `BOOLEAN`
 
@@ -51,7 +51,6 @@ export default {
 
 ## Usage Notes
 
-- Boolean fields are rendered as checkboxes in the admin UI
 - Without a default value, the field will be `null` (unless `required: true`)
 - Setting `required: true` forces users to explicitly choose true or false
 - Common use cases: published status, feature flags, visibility toggles

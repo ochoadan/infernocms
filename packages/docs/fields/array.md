@@ -63,13 +63,6 @@ The API validates array values:
 - Each item's sub-fields are validated according to their type
 - Required sub-fields are enforced per item
 
-## Admin UI
-
-The admin renders each array item inside a bordered container with:
-- Sub-field renderers for each field
-- Add, remove, and reorder buttons
-- Item numbering
-
 ## TypeScript Type
 
 Generated as an array of inline object type:

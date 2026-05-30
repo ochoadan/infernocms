@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "dev": "pnpm --filter infernocms-basic-example dev",
-    "build": "pnpm --filter infernocms build && pnpm --filter @infernocms/admin build",
+    "build": "pnpm --filter infernocms build",
     "build:docs": "pnpm --filter @infernocms/docs build",
     "test": "pnpm --filter infernocms test"
   },

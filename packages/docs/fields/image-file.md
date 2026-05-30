@@ -136,7 +136,6 @@ async function uploadAndCreatePost(file, postData) {
 
 - Both `image` and `file` fields store plain text URLs (no binary data)
 - The database does not differentiate between image and file fields (both use `TEXT`)
-- The difference is in the admin UI (image preview vs file link)
 - Use the `/api/_upload` endpoint to handle file uploads
 - Store the returned URL in the image/file field
 - File validation and storage is handled by the upload endpoint

@@ -22,7 +22,6 @@ export default defineConfig({
 Each collection automatically gets:
 - A database table
 - REST API endpoints at `/api/{collection}`
-- Admin UI pages for managing content
 
 ## Field Definitions
 

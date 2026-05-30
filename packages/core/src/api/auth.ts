@@ -15,7 +15,7 @@ function getUser(req: unknown): RequestUser | undefined {
 }
 
 export function registerAuthRoutes(app: FastifyInstance, db: DbClient): void {
-  // Verify the current bearer token. Used by admin UI on paste.
+  // Verify the current bearer token.
   app.get('/api/_auth/me', async (request, reply) => {
     const user = getUser(request);
     if (!user) {

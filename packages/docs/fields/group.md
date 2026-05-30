@@ -55,10 +55,6 @@ The API validates group values:
 - Each sub-field is validated according to its type
 - Required sub-fields are enforced
 
-## Admin UI
-
-The admin renders sub-fields inside a bordered container, using the same field renderers as top-level fields.
-
 ## TypeScript Type
 
 Generated as an inline object type:

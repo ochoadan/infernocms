@@ -56,4 +56,3 @@ export default {
 - Values are validated on write: only options from the array are allowed
 - No shorthand syntax available (must use `field.select()` helper)
 - For dynamic relationships, use the `relation` field instead
-- Select fields render as dropdown menus in the admin UI

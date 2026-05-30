@@ -8,6 +8,10 @@ While the project is pre-1.0, breaking changes may occur in minor releases (`0.x
 
 ## [Unreleased]
 
+### Removed
+
+- **Bundled admin UI.** The preview admin (`packages/admin`) is gone and `infernocms dev` no longer spawns an admin process. InfernoCMS is API-first/headless — operate it through the REST API, the CLI, and `@infernocms/next`.
+
 ### Added
 
 - **`@infernocms/next`** — Next.js extension package. Reads your `content.config.ts` and emits a typed client (`cms.posts.list()`, `cms.posts.bySlug()`, etc.). Includes a write-client factory (server-only, token-auth), a webhook revalidation route factory, a `<CmsImage>` component for CMS-served files, and a `withInfernoCMS()` Next config wrapper. Replaces the boilerplate every Next.js consumer of InfernoCMS used to rewrite. See [packages/next/README.md](packages/next/README.md).

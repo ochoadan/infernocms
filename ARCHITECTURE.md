@@ -1,6 +1,6 @@
 # Architecture
 
-> ⚠️ The "Admin UI" sections below describe the current preview implementation. Sub-project 3 (admin rebuild on shadcn preset) will replace it. Other sections track current behavior.
+> InfernoCMS is headless and API-first. This document describes the engine: schema, database, REST API, and auth.
 
 ## System overview
 
@@ -31,12 +31,6 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                    Storage Layer                            │
 │        PGlite (default) │ PostgreSQL (production)          │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│                     Admin UI                                │
-│           Next.js app consuming the REST API                │
-│    Served by CLI in dev (port 4001) or embedded in prod     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -302,71 +296,6 @@ GET /api/posts?fields=id,title,slug
 }
 ```
 
-## Admin UI
-
-### Architecture
-
-The admin is a **separate Next.js application** that consumes the REST API. In development, the CLI orchestrates both processes:
-
-- **API server**: Fastify on port 4000
-- **Admin UI**: Next.js on port 4001
-
-In production, the admin can be:
-- Built as static assets and served by the API server
-- Deployed separately (e.g., Vercel) pointing at the API URL
-- Disabled entirely for headless-only use
-
-The admin communicates with the API over HTTP (CORS is enabled by default).
-
-### Auto-generated from schema
-
-The admin reads the schema from `GET /api/_schema` and generates:
-
-1. **Sidebar navigation** — One item per collection
-2. **List views** — Table with sortable columns, pagination, edit/delete actions
-3. **Edit forms** — Fields generated from schema
-
-### Field → Component mapping
-
-| Field type | Admin component |
-|------------|-----------------|
-| `text` | Text input |
-| `textarea` | Textarea |
-| `richtext` | Block editor (Plate) |
-| `number` | Number input |
-| `boolean` | Toggle switch |
-| `datetime` | Date-time picker |
-| `date` | Date picker |
-| `select` | Dropdown |
-| `multiselect` | Multi-select dropdown — planned |
-| `image` | Image picker + upload |
-| `file` | File picker + upload |
-| `relation` | Searchable select / modal picker |
-| `slug` | Text input with auto-generate toggle |
-| `blocks` | Block editor with picker |
-| `json` | JSON editor |
-| `link` | URL + label + target fields |
-| `group` | Nested field group |
-| `array` | Repeatable item list |
-
-### Admin routes
-
-```
-/admin
-├── /                           # Dashboard (collection cards, quick actions)
-├── /collections/:name          # List view
-├── /collections/:name/new      # Create form
-├── /collections/:name/:id      # Edit form
-├── /settings                   # CMS settings
-└── /media                      # Media library (planned)
-```
-
-Built with:
-- **Next.js 15 App Router** — Server components for initial load
-- **shadcn/ui** — Component library
-- **Custom data table** — Sortable, paginated, searchable
-- **Plate** — Rich text / block editor
-
 ## File structure
 
 ```
@@ -385,7 +314,6 @@ your-project/
         │   ├── database/       # Database connection, migration, repository
         │   ├── api/            # Server, routes, handlers, response helpers
         │   └── validation.ts   # Validation engine
-        ├── admin/              # Admin UI (Next.js app)
         └── cli/                # CLI commands
 ```
 
@@ -469,9 +397,9 @@ Blocks stored as JSON array:
 
 ## Authentication
 
-Token-first bearer auth. Every request — admin UI, LLM pipeline, curl — sends `Authorization: Bearer <token>`. Tokens are first-class records in `_infernocms_tokens` with three scopes (`read` / `write` / `admin`), revocable from the admin UI, hashed at rest with `sha256`.
+Token-first bearer auth. Every request — LLM pipeline, your app's server, curl — sends `Authorization: Bearer <token>`. Tokens are first-class records in `_infernocms_tokens` with three scopes (`read` / `write` / `admin`), revocable via `DELETE /api/_tokens/:id`, hashed at rest with `sha256`.
 
-The bootstrap admin token is set via the `INFERNOCMS_BOOTSTRAP_TOKEN` environment variable (used by Inferno Cloud during provisioning) or generated on first start, printed to stdout, and appended to `.env` if present.
+The bootstrap admin token is set via the `INFERNOCMS_BOOTSTRAP_TOKEN` environment variable (used by hosting platforms during provisioning) or generated on first start, printed to stdout, and appended to `.env` if present.
 
 There is no "no auth" mode at the request layer — the middleware always runs. Public read access is expressed at the collection level via `access.read`. Full design: [auth spec](docs/superpowers/specs/2026-05-08-cms-auth-design.md).
 
@@ -485,8 +413,8 @@ export default defineConfig({
         read: () => true,                          // public
         create: ({ user }) => !!user,              // logged in
         update: ({ user, item }) =>
-          user?.role === 'admin' || item.author === user?.id,
-        delete: ({ user }) => user?.role === 'admin',
+          user?.scope === 'admin' || item.author === user?.id,
+        delete: ({ user }) => user?.scope === 'admin',
       },
       fields: { /* ... */ }
     }
@@ -577,7 +505,6 @@ npx infernocms dev
 - Local file storage
 - Hot reload on config changes
 - API at `localhost:4000/api`
-- Admin at `localhost:4001/admin` (started automatically by CLI)
 
 ### Production (self-hosted)
 
@@ -591,7 +518,6 @@ docker run -e DATABASE_URL=postgres://... infernocms/infernocms
 
 - Full PostgreSQL (same code, just different connection)
 - S3/R2 for file storage
-- Admin built as static assets, served by the API server
 - Run as Node.js server or Docker container
 
 ### Production (managed — future)

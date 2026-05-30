@@ -1,6 +1,6 @@
 # Authentication
 
-InfernoCMS uses **token-first auth**. Every request — admin UI, LLM pipeline, curl — sends a bearer token. There are no passwords, no sessions, no cookies, no OAuth.
+InfernoCMS uses **token-first auth**. Every request — LLM pipeline, curl — sends a bearer token. There are no passwords, no sessions, no cookies, no OAuth.
 
 ## Three scopes
 
@@ -55,9 +55,7 @@ curl -X POST http://localhost:4000/api/posts \
 
 ## Managing tokens
 
-Once you've signed into the admin UI with the bootstrap token, mint additional tokens via **Settings → API tokens** for things like content pipelines or read-only public sites. Each token has a name, a scope, a `created_at`, and a `last_used_at` for auditing.
-
-Or via the API:
+Using the bootstrap token, mint additional tokens via the `POST /api/_tokens` endpoint for things like content pipelines or read-only public sites. Each token has a name, a scope, a `created_at`, and a `last_used_at` for auditing.
 
 ```bash
 # List active tokens

@@ -115,5 +115,4 @@ With `depth=1`:
 - Many-to-many relations use an automatically created junction table
 - Foreign keys use `ON DELETE SET NULL` (deleting related entry sets field to null)
 - Use `depth` parameter in API queries to include related data
-- Relations are displayed as searchable dropdowns in the admin UI
 - Self-referential relations are supported (e.g., `relatedPosts: 'rel:posts[]'`)

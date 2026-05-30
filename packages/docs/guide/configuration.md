@@ -111,7 +111,7 @@ storage: {
 
 ### Authentication
 
-Auth is not configured here — it's always on. Tokens are managed at runtime via the admin UI or the `/api/_tokens` endpoint, not in config. See [Authentication](/guide/auth).
+Auth is not configured here — it's always on. Tokens are managed at runtime via the `/api/_tokens` endpoint, not in config. See [Authentication](/guide/auth).
 
 ### `database` (optional)
 

@@ -102,7 +102,7 @@ webhooks: [
 ],
 ```
 
-Then create or update content via the admin or API and watch the deliveries arrive.
+Then create or update content via the API and watch the deliveries arrive.
 
 ## Combining with hooks
 

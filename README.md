@@ -2,7 +2,7 @@
 
 A headless CMS that gets out of your way — define content in code, get a REST API instantly.
 
-> **0.1.0** ships the API + schema engine. The admin UI is a **preview** that runs in the monorepo; full npm-installable admin lands in 0.2.0. See [Status](#status) below.
+> **0.1.0** ships the API + schema engine. InfernoCMS is headless — you operate it through the REST API, the CLI, and [`@infernocms/next`](packages/next). See [Status](#status) below.
 
 ```bash
 npm install infernocms
@@ -81,10 +81,7 @@ Public reads are still allowed by default — auth only gates writes and admin e
 | PGlite + PostgreSQL drivers | ✅ Stable |
 | Local + S3 storage | ✅ Stable |
 | Type generation | ✅ Stable |
-| **Admin UI** | 🟡 Preview — runs from the monorepo, not yet npm-installable |
 | GraphQL, version history, i18n | ⏳ Roadmap |
-
-The admin UI is functional and exercises every field type, but hasn't been packaged for external npm consumption in this release. Use it now by running the monorepo locally; the npm-installable admin is the headline feature for `0.2.0`.
 
 ## Documentation
 
@@ -100,7 +97,6 @@ A VitePress docs site is also available under `packages/docs` (`pnpm --filter @i
 |---|---|---|
 | [`packages/core`](packages/core) | `infernocms` | Schema parser, database, REST API, CLI |
 | [`packages/next`](packages/next) | `@infernocms/next` | Next.js extension: typed client codegen, webhook revalidation, image handling |
-| [`packages/admin`](packages/admin) | _not published in 0.1.0_ | Admin UI (Next.js 15 + shadcn/ui) |
 | [`packages/docs`](packages/docs) | _internal_ | VitePress documentation site |
 
 ## Examples
@@ -119,8 +115,8 @@ A VitePress docs site is also available under `packages/docs` (`pnpm --filter @i
 
 ```bash
 pnpm install
-pnpm dev          # runs the basic example (API + admin preview)
-pnpm build        # builds core + admin
+pnpm dev          # runs the basic example (API on :4000)
+pnpm build        # builds core
 pnpm test         # runs core tests (32 tests)
 ```
 

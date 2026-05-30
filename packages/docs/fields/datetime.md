@@ -82,6 +82,5 @@ export default {
 
 - `datetime` fields store both date and time with timezone support
 - `date` fields store only the date (year, month, day)
-- Both render as date/time pickers in the admin UI
 - Values are stored in ISO 8601 format
 - Use `datetime` for timestamps, `date` for calendar dates only

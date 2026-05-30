@@ -4,7 +4,7 @@ function getUser(req) {
     return req.user;
 }
 export function registerAuthRoutes(app, db) {
-    // Verify the current bearer token. Used by admin UI on paste.
+    // Verify the current bearer token.
     app.get('/api/_auth/me', async (request, reply) => {
         const user = getUser(request);
         if (!user) {

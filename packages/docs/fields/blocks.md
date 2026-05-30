@@ -102,14 +102,6 @@ The API validates blocks against their schemas:
 - If a block schema exists for the type, sub-fields are validated against it
 - Required sub-fields in block schemas are enforced
 
-## Admin UI
-
-The admin renders blocks using a schema-driven editor:
-- **Block picker**: Shows available block types from schemas filtered by `allowed`
-- **Block rendering**: Each block's fields are rendered using the standard field renderers
-- **Reorder/remove**: Blocks can be reordered or removed
-- **Unknown types**: Blocks with types not in any schema show a fallback editor
-
 ## Type Generation
 
 When block schemas are defined, `infernocms generate types` produces typed interfaces:

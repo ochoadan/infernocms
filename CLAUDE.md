@@ -4,9 +4,9 @@ Onboarding for AI coding agents working in this repo. Read this before making ch
 
 ## What this is
 
-InfernoCMS — a code-first headless CMS. `content.config.ts` defines schema, you get a REST API and an admin UI. Single npm package (`infernocms`) plus a Next.js admin and a VitePress docs site, all in a pnpm monorepo at `packages/`.
+InfernoCMS — a code-first headless CMS. `content.config.ts` defines schema, you get a REST API. Single npm package (`infernocms`) plus the `@infernocms/next` extension and a VitePress docs site, all in a pnpm monorepo at `packages/`.
 
-**Primary product consumer is LLMs / agentic content pipelines** (e.g. MassContent, inferno-content), not humans hand-authoring schemas. Design APIs, error messages, defaults, and docs around LLM correctness — predictable shapes, explicit constraints, actionable errors. Humans matter for the admin UI; LLMs matter for the API surface.
+**Primary product consumer is LLMs / agentic content pipelines**, not humans hand-authoring schemas. Design APIs, error messages, defaults, and docs around LLM correctness — predictable shapes, explicit constraints, actionable errors. The API is the product surface.
 
 ## Authoritative sources of truth
 
@@ -25,9 +25,7 @@ When the codebase and a doc disagree, prefer this order:
 |---|---|---|---|
 | 1 | InfernoCMS proper token-first auth | Done | `docs/superpowers/specs/2026-05-08-cms-auth-design.md` |
 | 2 | `@infernocms/next` extension package | Done | `docs/superpowers/specs/2026-05-08-next-extension-design.md` |
-| 3 | Admin UI rebuild (shadcn preset `b1FktqLQI`) | Done | preset applied, vega-style primitives regenerated, bearer-token auth wired, token mgmt page added |
 | 4 | User-facing docs overhaul | Auth + nav done; full LLM-first style pass deferred | new `guide/auth.md`, updated `guide/configuration.md`, `api/endpoints.md`, `index.md`, sidebar |
-| 5 | Inferno Cloud next-auth integration | Done | Auth.js v5 JWT strategy, GitHub + Google providers; spec in `inferno-cloud/docs/specs/2026-05-08-next-auth-migration.md`; existing Supabase user IDs do not migrate, see spec |
 | 6 | End-to-end audit + cleanup | Done | full monorepo build + test green; CronRadar downstream migrated; cross-repo state aligned |
 
 ## Repo layout
@@ -35,7 +33,7 @@ When the codebase and a doc disagree, prefer this order:
 ```
 packages/
   core/    # The published npm package: schema, DB, REST API, CLI, auth
-  admin/   # Next.js 15 admin UI (shadcn-based, rebuild in flight)
+  next/    # @infernocms/next — typed client, webhook revalidation, image handling
   docs/    # VitePress docs site
 examples/
   basic/   # Reference content.config.ts exercising every field type
@@ -52,7 +50,6 @@ Token-first, bearer-only. No cookies, no sessions, no `x-admin-key`, no external
 - Tokens are DB rows: `{ id, name, scope, hash, created_at, last_used_at, revoked_at }`.
 - Three scopes: `read` / `write` / `admin`.
 - Bootstrap admin token comes from `INFERNOCMS_BOOTSTRAP_TOKEN` env var, or generated on first run and printed + appended to `.env`.
-- Admin UI = paste-token client. Token in localStorage, sent on every fetch.
 
 If reading code that references `adminSecret`, `auth.secret`, `x-admin-key`, `infernocms-session`, `/api/_auth/login`, or `/api/_auth/logout`, it's pre-overhaul; check the sub-project 1 spec/plan for the replacement.
 
@@ -67,7 +64,6 @@ Read these before edits in their domain:
 | Database & migrations | `database/connection.ts`, `database/migrator.ts`, `database/repository.ts` |
 | Schema | `schema/define.ts`, `schema/fields.ts`, `config/loader.ts`, `config/parser.ts` |
 | CLI | `cli/index.ts`, `cli/commands/start.ts`, `cli/commands/dev.ts` |
-| Admin shell | `packages/admin/src/app/layout.tsx`, `components/admin-shell.tsx`, `lib/api.ts` |
 
 ## Editing rules for agents
 
@@ -83,8 +79,8 @@ Read these before edits in their domain:
 
 ```bash
 pnpm install                              # bootstrap workspace
-pnpm dev                                  # run examples/basic — API on :4000, admin on :4001
-pnpm build                                # build core (tsc) + admin (next)
+pnpm dev                                  # run examples/basic — API on :4000
+pnpm build                                # build core (tsc)
 pnpm --filter infernocms test             # run core test suite (vitest)
 pnpm --filter infernocms test:watch       # vitest watch mode
 pnpm --filter @infernocms/docs dev        # VitePress docs dev server
@@ -93,7 +89,7 @@ pnpm -r build && pnpm -r test             # full monorepo verify
 
 ## Conventions
 
-- **Default ports:** API 4000, Admin 4001.
+- **Default ports:** API 4000.
 - **API response envelope:** `{ data: ... }` for success, `{ error: { message, code } }` for errors. Audit any endpoint that returns raw payloads.
 - **Slug generation strips dots** (`slugify()` in `database/repository.ts`). `".NET"` → `"net"`. Provide explicit slugs for content where dots matter.
 - **Tests live next to source** as `*.test.ts`, excluded from the published `dist/`.

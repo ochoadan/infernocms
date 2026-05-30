@@ -57,13 +57,13 @@ access: {
 
 The context object passed to function rules contains:
 
-- **`ctx.user`**: The authenticated user from the JWT token (or `null` if not authenticated)
+- **`ctx.user`**: The authenticated API token (`{ id, name, scope }`), or `null` if not authenticated
 - **`ctx.item`**: The existing item being updated/deleted (only available for `update` and `delete` operations)
 
 ```typescript
 access: {
   update: (ctx) => {
-    // ctx.user: { id: '123', email: 'user@example.com', role: 'editor', ... }
+    // ctx.user: { id: 'tok_abc', name: 'content-pipeline', scope: 'write' }
     // ctx.item: { id: '456', authorId: '123', title: 'My Post', ... }
 
     return ctx.user?.id === ctx.item?.authorId
@@ -118,70 +118,14 @@ access: {
 
 ## Authentication
 
-### JWT Authentication
-
-To use user-based access control, configure a JWT secret in your config:
-
-```typescript
-export default defineConfig({
-  auth: {
-    secret: process.env.JWT_SECRET, // HS256 signing secret
-  },
-  collections: { /* ... */ },
-})
-```
-
-Clients authenticate by sending a JWT token in the `Authorization` header:
+InfernoCMS uses **token-first bearer auth**. Every request sends `Authorization: Bearer <token>`, where the token is a first-class record with a `read`, `write`, or `admin` scope. There is no `auth` config block, no JWT signing secret, and no `X-Admin-Key` header — those were removed in the token-first overhaul. See the [Authentication guide](/guide/auth) for the full model.
 
 ```bash
 GET /api/posts
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Authorization: Bearer icms_...
 ```
 
-The JWT payload is decoded and available as `ctx.user` in access functions:
-
-```json
-{
-  "id": "user-123",
-  "email": "user@example.com",
-  "role": "editor",
-  "iat": 1234567890
-}
-```
-
-### Admin Bypass
-
-Configure an admin secret key for privileged access that bypasses all access rules:
-
-```typescript
-export default defineConfig({
-  auth: {
-    secret: process.env.JWT_SECRET,
-    adminSecret: process.env.ADMIN_SECRET,
-  },
-})
-```
-
-Clients send the admin key via the `X-Admin-Key` header:
-
-```bash
-GET /api/posts
-X-Admin-Key: your-admin-secret-key
-```
-
-Requests with a valid admin key bypass all access control rules.
-
-## Admin UI Integration
-
-### Saving the Admin Key
-
-In the admin UI, navigate to **Settings** to save your admin key. Once saved, all API requests from the admin UI will include the `X-Admin-Key` header.
-
-This allows the admin UI to bypass access rules and manage all content.
-
-### Access Without Admin Key
-
-If no admin key is configured or saved, the admin UI respects the access rules defined in your config. This can be useful for role-based admin access.
+In access functions, `ctx.user` is the authenticated token (`{ id, name, scope }`) or `null` for an unauthenticated request. An `admin`-scope token satisfies any rule that checks `ctx.user?.scope === 'admin'`.
 
 ## Complete Examples
 
@@ -299,10 +243,8 @@ apiKeys: {
 
 ## Best Practices
 
-1. **Always use HTTPS in production** when transmitting JWTs
-2. **Keep JWT secrets secure** - use environment variables, never commit to version control
-3. **Rotate admin secrets regularly** for security
-4. **Use short JWT expiration times** (e.g., 1 hour) and implement refresh tokens
-5. **Validate JWTs on the backend** - never trust client-side validation alone
-6. **Test access rules thoroughly** before deploying to production
-7. **Use admin bypass sparingly** - prefer role-based access control when possible
+1. **Always use HTTPS in production** when transmitting bearer tokens
+2. **Keep tokens secret** — store them in environment variables, never commit them
+3. **Scope tokens narrowly** — hand out `read`/`write` tokens; reserve `admin` for token management
+4. **Rotate and revoke tokens** when they're no longer needed (`DELETE /api/_tokens/:id`)
+5. **Test access rules thoroughly** before deploying to production

@@ -2,7 +2,7 @@
 
 A headless CMS that gets out of your way — define content in code, get a REST API instantly.
 
-> **0.1.0** ships the API + schema engine. The admin UI is a preview available in the [monorepo](https://github.com/ochoadan/infernocms); a published npm admin package is targeted for `0.2.0`. The core API is stable.
+> **0.1.0** ships the API + schema engine. InfernoCMS is headless — you operate it through the REST API, the CLI, and `@infernocms/next`. The core API is stable.
 
 ## Quick start
 
@@ -32,7 +32,7 @@ export default defineConfig({
 npx infernocms dev
 ```
 
-API at `http://localhost:4000/api/posts`. Admin at `http://localhost:4001`.
+API at `http://localhost:4000/api/posts`.
 
 ## Config
 
@@ -116,7 +116,7 @@ export default defineConfig({
 | `group` | `required`, `fields` |
 | `array` | `required`, `fields` |
 
-All fields also accept `silent: true` to hide from the admin form (still readable and writable via API).
+All fields also accept `silent: true` to flag them as hidden from any consuming UI (still readable and writable via API, and still present in schema introspection).
 
 Slugs auto-generate from the `from` field on create and update when blank. Explicit values are slugified as-is.
 
@@ -163,10 +163,12 @@ System endpoints:
 
 ```
 GET    /api/_health               # Health check
-GET    /api/_schema               # Schema introspection (requires auth if configured)
-POST   /api/_upload               # File upload (multipart, 10MB limit)
-POST   /api/_auth/login           # Admin login (returns session cookie)
-POST   /api/_auth/logout          # Clear session cookie
+GET    /api/_schema               # Schema introspection (admin scope)
+POST   /api/_upload               # File upload (multipart, 10MB limit; write/admin scope)
+GET    /api/_auth/me              # Identify the current bearer token
+GET    /api/_tokens               # List tokens (admin scope)
+POST   /api/_tokens               # Mint a token (admin scope; plaintext returned once)
+DELETE /api/_tokens/:id           # Revoke a token (admin scope)
 ```
 
 Upload expects a `file` multipart field. Accepted extensions: `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.avif`, `.pdf`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.csv`, `.txt`, `.mp4`, `.webm`, `.mp3`, `.wav`, `.ogg`, `.zip`, `.json`. Returns `{ "data": { "url": "...", "filename": "...", "ext": "..." } }`.
@@ -316,40 +318,28 @@ Blocks are returned as an array:
 
 ## Auth
 
-Disabled by default. All endpoints are publicly accessible unless auth is configured.
+Token-first. Every request authenticates with `Authorization: Bearer <token>` — no passwords, sessions, cookies, or OAuth. Tokens are first-class rows in the `_infernocms_tokens` system table, hashed at rest, each with one of three scopes:
 
-### Config
+| Scope | Can |
+|-------|-----|
+| `read` | Read content |
+| `write` | Read + create/update/delete content, upload files |
+| `admin` | Everything, plus manage tokens and read `/api/_schema` |
 
-```typescript
-export default defineConfig({
-  auth: {
-    adminSecret: 'your-admin-secret',  // Enables admin login + X-Admin-Key header auth
-    secret: 'your-jwt-secret',         // Enables Bearer token (JWT HS256) auth
-  },
-  // ...
-});
+A bootstrap `admin` token is set via the `INFERNOCMS_BOOTSTRAP_TOKEN` env var, or generated on first start, printed to stdout, and appended to `.env` if present.
+
+```bash
+# Identify the current token
+curl http://localhost:4000/api/_auth/me -H "Authorization: Bearer $TOKEN"
+
+# Mint a write-scoped token (plaintext returned once)
+curl -X POST http://localhost:4000/api/_tokens \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"content-pipeline","scope":"write"}'
 ```
 
-When auth is configured, the default access policy is:
-
-| Operation | Default | Override with |
-|-----------|---------|---------------|
-| Read | Public | `access.read` |
-| Create | Any authenticated user | `access.create` |
-| Update | Any authenticated user | `access.update` |
-| Delete | Admin only (`_isAdmin: true`) | `access.delete` |
-
-The built-in admin login and `X-Admin-Key` header both set `_isAdmin: true`. If you sign your own JWTs with `secret`, include `_isAdmin: true` in the payload for delete access — or define explicit `access.delete` rules.
-
-### Auth methods
-
-| Method | Header/Cookie | Use case |
-|--------|--------------|----------|
-| Admin key | `X-Admin-Key: {adminSecret}` | Server-to-server API calls |
-| Bearer JWT | `Authorization: Bearer {token}` | App users (sign tokens with `secret`) |
-| Session cookie | `infernocms-session` (httpOnly) | Admin UI login |
-
-The admin UI authenticates via `POST /api/_auth/login` with `{ "key": "{adminSecret}" }`, which sets an httpOnly session cookie. Log out with `POST /api/_auth/logout`. The login endpoint is rate-limited to 10 requests per 15 minutes.
+Public reads are allowed by default — auth gates writes and admin endpoints. Override per collection via `access.read`.
 
 ### Access control
 
@@ -361,10 +351,10 @@ export default defineConfig({
     posts: {
       access: {
         read: () => true,                              // public
-        create: ({ user }) => !!user,                   // any authenticated user
+        create: ({ user }) => !!user,                   // any authenticated token
         update: ({ user, item }) =>
-          user?.role === 'admin' || item.author === user?.id,
-        delete: ({ user }) => user?.role === 'admin',
+          user?.scope === 'admin' || item.author === user?.id,
+        delete: ({ user }) => user?.scope === 'admin',
       },
       fields: { /* ... */ }
     }
@@ -372,7 +362,7 @@ export default defineConfig({
 });
 ```
 
-Access rules receive `{ user }` for read/create and `{ user, item }` for update/delete. `user` is the decoded JWT payload, or `{ role: 'admin', _isAdmin: true }` for admin key and session auth. Rules can be `boolean`, sync functions, or async functions.
+Access rules receive `{ user }` for read/create and `{ user, item }` for update/delete. `user` is the authenticated token (`{ id, name, scope }`) or `null` for an unauthenticated request. Rules can be `boolean`, sync functions, or async functions.
 
 ## Hooks
 
@@ -453,22 +443,6 @@ if (signature !== expected) throw new Error('Invalid signature');
 
 Webhooks are fire-and-forget with a 10-second timeout. Failed deliveries are logged but not retried.
 
-## Admin UI
-
-> **0.1.0 status:** preview. The admin UI is functional and auto-generated from your schema, but it is **not bundled** with the npm package in this release. When you `npm install infernocms` and run `npx infernocms dev`, only the API starts. The CLI prints a notice explaining how to run the admin from the [monorepo](https://github.com/ochoadan/infernocms). A published admin package is targeted for `0.2.0`.
-
-### Routes (when running)
-
-```
-/                                  # Dashboard
-/collections/:name                 # List view
-/collections/:name/new             # Create form
-/collections/:name/:id             # Edit form
-/settings                          # Settings
-```
-
-The admin reads `/api/_schema` from the API and renders forms dynamically — no per-collection configuration needed.
-
 ## Type generation
 
 Auto-generates TypeScript types from your config:
@@ -544,9 +518,9 @@ npx infernocms dev
 - Local file storage in `./uploads/`
 - Hot reload on config changes
 - Types auto-generated on startup
-- API at `localhost:4000` (admin preview at `localhost:4001` only when running from the monorepo — see [Admin UI](#admin-ui) above)
+- API at `localhost:4000`
 
-CLI options: `--port`, `--admin-port`, `--config`, `--no-admin`, `--dry-run`
+CLI options: `--port`, `--config`, `--dry-run`
 
 ### Production
 
@@ -589,7 +563,7 @@ export default defineConfig({
 infernocms/
 ├── packages/
 │   ├── core/           # Schema parser, database, API server, CLI, validation
-│   └── admin/          # Admin UI (Next.js 15)
+│   └── next/           # @infernocms/next — typed client, webhook revalidation, image handling
 ```
 
 ### User project
@@ -613,6 +587,4 @@ your-project/
 | Database (dev) | PGlite (embedded PostgreSQL) |
 | Database (prod) | PostgreSQL |
 | Database access | Raw SQL (no ORM) |
-| Admin | Next.js 15 + shadcn/ui |
-| Rich text | Plate |
 | File storage | Local filesystem / S3-compatible |

@@ -4,7 +4,7 @@ layout: home
 hero:
   name: InfernoCMS
   text: Headless CMS, defined in code.
-  tagline: Define your content schema in TypeScript. Get a full REST API instantly. Admin UI in preview.
+  tagline: Define your content schema in TypeScript. Get a full REST API instantly.
   actions:
     - theme: brand
       text: Get Started
@@ -30,7 +30,7 @@ features:
 
 ## Status
 
-`0.1.0` ships the headless API + schema engine as a single npm package. The admin UI is a **preview** that runs in the [monorepo](https://github.com/ochoadan/infernocms); a published admin package is targeted for `0.2.0`.
+`0.1.0` ships the headless API + schema engine as a single npm package.
 
 ```bash
 npm install infernocms

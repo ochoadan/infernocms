@@ -27,9 +27,6 @@ jobs:
       - name: Build core
         run: pnpm --filter infernocms build
 
-      - name: Build admin
-        run: pnpm --filter @infernocms/admin build
-
       - name: Test core
         run: pnpm --filter infernocms test
 

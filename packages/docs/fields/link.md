@@ -60,13 +60,6 @@ The API validates link values:
 - `label` must be a string (if provided)
 - `target` must be `'_self'` or `'_blank'` (if provided)
 
-## Admin UI
-
-The admin renders three inputs:
-- **URL** - Text input for the link URL
-- **Label** - Optional text input for display text
-- **Target** - Dropdown to choose same window or new window
-
 ## TypeScript Type
 
 Generated type:

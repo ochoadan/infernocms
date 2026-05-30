@@ -52,10 +52,6 @@ npx infernocms dev
 
 This will start the **API server** at `http://localhost:4000`.
 
-::: info Admin UI in 0.1.0
-The admin UI is **preview-only** in this release. When you `npm install infernocms`, the CLI will print a notice that the admin isn't bundled — this is expected. To try the admin preview, clone the [monorepo](https://github.com/ochoadan/infernocms) and run `pnpm dev`. A published admin package (`@infernocms/admin`) is targeted for `0.2.0`.
-:::
-
 No database setup required — InfernoCMS uses [PGlite](https://pglite.dev/) (embedded PostgreSQL) by default for local development. Your data is stored in `.infernocms/data/`. The same code works with a full PostgreSQL database in production by setting `DATABASE_URL`.
 
 ## Test Your API

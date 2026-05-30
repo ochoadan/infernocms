@@ -1,6 +1,6 @@
 # Rich Text Field
 
-Rich text editor field powered by Plate.js, storing formatted content as JSON.
+Rich text field that stores formatted content as Plate.js JSON.
 
 **Database Type:** `JSONB` (Plate.js JSON format)
 
@@ -12,11 +12,11 @@ Rich text editor field powered by Plate.js, storing formatted content as JSON.
 
 ## Features
 
-The rich text editor in the admin UI supports:
+The Plate.js content format represents:
 
 - **Text Formatting** - Bold, italic, underline, strikethrough
 - **Headings** - H1, H2, H3, H4, H5, H6
-- **Links** - Hyperlinks with URL input
+- **Links** - Hyperlinks with a URL
 - **Lists** - Bulleted and numbered lists
 - **Paragraphs** - Standard paragraph blocks
 
@@ -81,7 +81,6 @@ Rich text is stored in Plate.js JSON format:
 ## Usage Notes
 
 - Content is stored as JSONB in the database (not HTML or markdown)
-- The admin UI provides a WYSIWYG editor powered by Plate.js
 - JSON format allows for structured parsing and rendering
 - No shorthand configuration options (use `field.richtext()` for all cases)
 - For plain text, use `textarea` instead

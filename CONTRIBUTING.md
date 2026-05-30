@@ -19,8 +19,8 @@ pnpm install
 
 | Command | What it does |
 |---|---|
-| `pnpm dev` | Runs the basic example — API on `:4000`, admin preview on `:4001` |
-| `pnpm build` | Builds `packages/core` (tsc) and `packages/admin` (Next.js) |
+| `pnpm dev` | Runs the basic example — API on `:4000` |
+| `pnpm build` | Builds `packages/core` (tsc) |
 | `pnpm build:docs` | Builds the VitePress docs site |
 | `pnpm test` | Runs `packages/core` tests (vitest) |
 
@@ -29,7 +29,7 @@ pnpm install
 ```
 packages/
   core/     # The published npm package (`infernocms`) — schema, DB, REST API, CLI
-  admin/    # Preview admin UI (Next.js 15 + shadcn/ui) — not on npm in 0.1.0
+  next/     # @infernocms/next — typed client, webhook revalidation, image handling
   docs/     # VitePress docs site
 examples/
   basic/    # Reference content.config.ts exercising every field type
@@ -44,15 +44,6 @@ pnpm --filter infernocms build         # tsc to dist/
 ```
 
 Tests live next to source as `*.test.ts`. They are excluded from the published `dist/`.
-
-## Working on admin
-
-```bash
-pnpm --filter @infernocms/admin dev    # next dev on :4001 (assumes API on :4000)
-pnpm --filter @infernocms/admin build  # production build
-```
-
-As of `0.1.0`, admin TypeScript validation runs on every build (`tsc --noEmit` clean under `strict: true`). ESLint isn't configured yet — `0.2.0` will add a config. PRs that re-enable suppressions to "make the build pass" will be rejected; fix the underlying issue instead.
 
 ## Pull requests
 
