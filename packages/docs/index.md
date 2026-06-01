@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: InfernoCMS
-  text: Headless CMS, defined in code.
-  tagline: Define your content schema in TypeScript. Get a full REST API instantly.
+  text: A CMS built for APIs and LLMs.
+  tagline: Define your content schema in TypeScript. Get a full REST API instantly — then build your own editor on top.
   actions:
     - theme: brand
       text: Get Started
@@ -31,6 +31,8 @@ features:
 ## Status
 
 `0.1.0` ships the headless API + schema engine as a single npm package.
+
+> **No bundled editor — by design.** InfernoCMS gives you the infrastructure to build your own editing UI: token-based login, schema-defined editable fields, and full CRUD through the API (or driven by an LLM). It doesn't ship an editor or prescribe a UI stack — that part is yours.
 
 ```bash
 npm install infernocms

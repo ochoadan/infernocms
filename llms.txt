@@ -1,8 +1,8 @@
 # InfernoCMS
 
-> A headless CMS for Node.js: define content schemas in TypeScript, get a REST API instantly. PGlite for dev, PostgreSQL for prod, S3-compatible storage, hooks, webhooks, and per-collection access control.
+> A CMS built for APIs and LLMs: define content schemas in TypeScript, get a REST API instantly. Headless by design — no bundled editor; you build your own UI on the auth, schema, and CRUD it provides. PGlite for dev, PostgreSQL for prod, S3-compatible storage, hooks, webhooks, and per-collection access control.
 
-InfernoCMS is a single npm package (`infernocms`) that turns a `content.config.ts` file into a working REST API — no migrations, no scaffolding, no codegen step. It is headless and code-first: you operate it through the REST API, the CLI, and the `@infernocms/next` package. Releases follow semver; `0.1.0` ships the API and schema engine.
+InfernoCMS is a single npm package (`infernocms`) that turns a `content.config.ts` file into a working REST API — no migrations, no scaffolding, no codegen step. It is headless and code-first: you operate it through the REST API, the CLI, and the `@infernocms/next` package. There is no bundled editor — InfernoCMS provides token login, schema-defined editable fields, and full CRUD (over the API or via an LLM) so you can build your own. Releases follow semver; `0.1.0` ships the API and schema engine.
 
 The fastest way to understand the surface is to read the schema introspection endpoint of any running instance: `GET /api/_schema` returns the full set of collections, fields, and shared blocks as JSON.
 

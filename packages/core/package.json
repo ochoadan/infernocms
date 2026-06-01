@@ -1,7 +1,7 @@
 {
   "name": "infernocms",
   "version": "0.1.0",
-  "description": "Headless, code-first CMS — define content schemas in TypeScript, get a REST API instantly",
+  "description": "A CMS built for APIs and LLMs — define content schemas in TypeScript, get a REST API instantly",
   "license": "AGPL-3.0-only",
   "type": "module",
   "repository": {

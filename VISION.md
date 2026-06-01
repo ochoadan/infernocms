@@ -2,7 +2,7 @@
 
 ## One sentence
 
-A code-first headless CMS designed to be driven primarily by LLMs and agentic content pipelines: schema lives in code, content moves over a predictable REST API.
+A CMS built for APIs and LLMs — schema lives in code, content moves over a predictable REST API, and the editing UI is yours to build.
 
 ## Who this is for
 

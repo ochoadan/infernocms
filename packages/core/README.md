@@ -1,8 +1,10 @@
 # InfernoCMS
 
-A headless CMS that gets out of your way — define content in code, get a REST API instantly.
+A CMS built for APIs and LLMs — define your content in code, get a REST API instantly.
 
 > **0.1.0** ships the API + schema engine. InfernoCMS is headless — you operate it through the REST API, the CLI, and `@infernocms/next`. The core API is stable.
+
+> **No bundled editor — by design.** InfernoCMS gives you the infrastructure to build your own editing UI: token-based login, schema-defined editable fields, and full create/read/update/delete through the API (or driven by an LLM). It doesn't ship an editor or prescribe a UI stack — that part is yours.
 
 ## Quick start
 

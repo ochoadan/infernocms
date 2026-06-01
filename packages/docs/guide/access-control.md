@@ -71,6 +71,8 @@ access: {
 }
 ```
 
+> **`ctx.user` is an API token, not an end user.** InfernoCMS authenticates tokens with a `scope` (`read` / `write` / `admin`), not individual people. Scope checks like `ctx.user?.scope === 'admin'` are the native model. For per-end-user ownership ("only the author may edit"), your consuming app owns end-user identity and must supply it — InfernoCMS doesn't model users. The owner/role examples below are patterns you wire up with app-supplied identity.
+
 ## Operations
 
 ### `read`
@@ -100,8 +102,8 @@ Controls who can update items via `PATCH /api/{collection}/:id`.
 ```typescript
 access: {
   update: (ctx) => {
-    // Only the author or admins can update
-    return ctx.user?.id === ctx.item?.authorId || ctx.user?.role === 'admin'
+    // An admin-scope token, or the author (identity supplied by your app)
+    return ctx.user?.scope === 'admin' || ctx.user?.id === ctx.item?.authorId
   },
 }
 ```
@@ -112,7 +114,7 @@ Controls who can delete items via `DELETE /api/{collection}/:id`.
 
 ```typescript
 access: {
-  delete: (ctx) => ctx.user?.role === 'admin', // Only admins can delete
+  delete: (ctx) => ctx.user?.scope === 'admin', // Only an admin-scope token can delete
 }
 ```
 
